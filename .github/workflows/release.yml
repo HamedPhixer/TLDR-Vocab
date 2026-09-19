@@ -13,13 +13,22 @@ jobs:
   release:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Get AutoHotkey 2.0.19
         shell: pwsh
+        # from AutoHotkey's own GitHub releases: autohotkey.com turns away
+        # build servers. Its exe and licence go into ahk\, wherever they sit
+        # inside the zip.
         run: |
-          Invoke-WebRequest https://www.autohotkey.com/download/2.0/AutoHotkey_2.0.19.zip -OutFile ahk.zip
-          Expand-Archive ahk.zip -DestinationPath ahk
+          Invoke-WebRequest https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.19/AutoHotkey_2.0.19.zip -OutFile ahk.zip
+          Expand-Archive ahk.zip -DestinationPath ahk-zip
+          New-Item -ItemType Directory ahk | Out-Null
+          foreach ($f in "AutoHotkey64.exe", "license.txt") {
+            $found = Get-ChildItem ahk-zip -Recurse -Filter $f | Select-Object -First 1
+            if (-not $found) { throw "$f is not in the AutoHotkey zip" }
+            Copy-Item $found.FullName ahk
+          }
 
       - name: Test (syntax and logic - the screen tests need a real desktop)
         shell: pwsh
