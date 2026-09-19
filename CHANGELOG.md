@@ -2,6 +2,13 @@
 
 Each version's notes. The release on GitHub is built from the section with its number.
 
+## 1.2.0-beta.3 — 2026-09-20
+
+### Fixed
+
+- A connection that fails on the first try — it happens on some networks — no longer means "Could not
+  reach GitHub": the update check and the update's downloads try once more, a few seconds later.
+
 ## 1.2.0-beta.2 — 2026-09-20
 
 Fixes from a last review of the one-click update. From 1.2.0-beta.1, **Update now** brings you here.

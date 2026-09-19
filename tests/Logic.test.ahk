@@ -239,7 +239,19 @@ Check("swap: a list naming the user's words is refused whole", Swap.Apply(app, n
 Check("swap: ...before anything changed", read(app "\Vocab.ahk") "," read(app "\words.json"), "old main,my words")
 try DirDelete(tmp, true)
 
-Check("network error: no double brackets", Http.Short("(0x80072EFD)"), "0x80072EFD")
+; no connection at all (a proxy on a closed port): the check tries twice,
+; a few seconds apart, then says so
+IniWrite("127.0.0.1:9", VocabIni(), "Network", "Proxy")
+said := Map()
+start := A_TickCount
+Update.Check(false, (text, found) => said["text"] := text)
+while (!said.Has("text") && A_TickCount - start < 40000)
+    Sleep(100)
+IniDelete(VocabIni(), "Network", "Proxy")
+CheckHas("update: no connection says so", said.Has("text") ? said["text"] : "(no answer)", "Could not reach GitHub")
+CheckTrue("update: ...after a second try", A_TickCount - start >= 3000, (A_TickCount - start) " ms")
+
+Check("network error: no double brackets",Http.Short("(0x80072EFD)"), "0x80072EFD")
 Check("network error: the text kept", Http.Short("0x80072EE2 - The operation timed out`r`n"), "The operation timed out")
 
 ;--- small helpers -------------------------------------------------------------

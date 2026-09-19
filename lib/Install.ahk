@@ -39,6 +39,7 @@ class Install {
     static Allowed := RepoUrl "/releases/download/"
     static g := "", notes := "", status := "", goLink := "", rel := "", busy := false
     static req := "", poller := "", step := "", dir := "", manAsset := "", zipAsset := "", kind := "", manifest := ""
+    static ask := "", retried := false
 
     static Marker => Install.Root "\started.txt"
     static Portable() => FileExist(A_ScriptDir "\AutoHotkey64.exe") != ""
@@ -173,8 +174,8 @@ class Install {
         return ""
     }
 
-    static Get(url, step, opts) {
-        Install.step := step
+    static Get(url, step, opts, retried := false) {
+        Install.step := step, Install.ask := [url, step, opts], Install.retried := retried
         Install.req := Http(url, opts)
         if !Install.poller
             Install.poller := ObjBindMethod(Install, "Poll")
@@ -196,6 +197,11 @@ class Install {
             return
         SetTimer(Install.poller, 0)
         r := Install.req, Install.req := ""
+        if (r.err != "" && !Install.retried) {                  ; no connection: once more (Update.Poll)
+            a := Install.ask
+            SetTimer(() => Install.busy && Install.Get(a[1], a[2], a[3], true), -3000)
+            return
+        }
         if !r.Ok
             return Install.Fail("The download failed (" r.Why "). Nothing was changed.")
         try {

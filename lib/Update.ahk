@@ -20,7 +20,7 @@
 #Requires AutoHotkey v2.0
 
 class Update {
-    static req := "", poller := "", manual := false, onDone := "", found := ""
+    static req := "", poller := "", manual := false, onDone := "", found := "", retried := false
 
     ; at start: once a day, unless switched off
     static Daily() {
@@ -40,7 +40,11 @@ class Update {
     static Check(manual := true, onDone := "") {
         if Update.req                           ; one check at a time
             return
-        Update.manual := manual, Update.onDone := onDone
+        Update.manual := manual, Update.onDone := onDone, Update.retried := false
+        Update.Ask()
+    }
+
+    static Ask() {
         Update.req := Http("https://api.github.com/repos/" RegExReplace(RepoUrl, "^https://github\.com/") "/releases?per_page=20"
             , {timeout: 10000, headers: Map("Accept", "application/vnd.github+json")})
         if !Update.poller
@@ -52,7 +56,16 @@ class Update {
         if !Update.req.Poll()
             return
         SetTimer(Update.poller, 0)
-        r := Update.req, Update.req := ""
+        r := Update.req
+        ; no connection at all (not an answer like 404): once more, a few
+        ; seconds later - a first connection sometimes fails where the second
+        ; works. req stays set meanwhile, so no second check starts.
+        if (r.err != "" && !Update.retried) {
+            Update.retried := true
+            SetTimer(() => Update.Ask(), -3000)
+            return
+        }
+        Update.req := ""
         news := ""
         if r.Ok
             try news := Update.Newest(Json.Parse(r.text), VocabVersion)
