@@ -136,28 +136,7 @@ docs\            decisions.md - why things are the way they are
 build.ps1        builds both zips into dist\
 ```
 
-Written for AutoHotkey v2.0. See [Releasing](#releasing) for how a version is published.
-
-## Releasing
-
-Version numbers are **MAJOR.MINOR.PATCH**:
-
-- **PATCH** (1.0.**1**) — only fixes, nothing new
-- **MINOR** (1.**1**.0) — new features; everything that worked before still does
-- **MAJOR** (**2**.0.0) — a change that breaks something old, such as settings or saved words
-
-A test version gets a suffix: **1.1.0-beta.1**, then **-beta.2**, and so on, until it becomes **1.1.0**. GitHub
-marks those as *pre-releases*, and the "latest release" link above skips them.
-
-To publish a version:
-
-1. Set `VocabVersion` in `lib\Config.ahk`, and add a section for it at the top of [CHANGELOG.md](CHANGELOG.md)
-   — the release notes are taken from there.
-2. Run `.\tests\run-tests.ps1`; everything must pass.
-3. Commit, push, then `git tag -a vX.Y.Z -m "TLDR Vocab X.Y.Z"` and `git push origin vX.Y.Z`.
-
-GitHub then tests the app again, builds both zips and publishes the release. It refuses to if the tag and
-`VocabVersion` differ, or if CHANGELOG.md has no section for that version.
+Written for AutoHotkey v2.0.
 
 ## Credits
 
