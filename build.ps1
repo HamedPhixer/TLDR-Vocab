@@ -4,8 +4,10 @@
     TLDR-Vocab-<version>.zip            the app, for people with AutoHotkey v2
     TLDR-Vocab-<version>-portable.zip   the same plus AutoHotkey64.exe, its
                                         licence and "Start TLDR Vocab.bat"
-    manifest.json                       every file of the app with its size and
-                                        SHA-256 - for an update check later
+    manifest.json                       the size and SHA-256 of both zips and of
+                                        every file in them - what the app checks
+                                        a download against before it updates
+                                        itself (lib\Install.ahk)
     notes.md                            this version's section of CHANGELOG.md,
                                         the release notes
 
@@ -53,25 +55,37 @@ New-Item -ItemType Directory -Force (Join-Path $stage "lib") | Out-Null
 Copy-Item (Join-Path $root "Vocab.ahk"), (Join-Path $root "dictionary.png"), (Join-Path $root "README.md"), (Join-Path $root "LICENSE") $stage
 Copy-Item (Join-Path $root "lib\*.ahk") (Join-Path $stage "lib")
 
-# manifest, before the portable extras are added
-$files = Get-ChildItem $stage -Recurse -File | Sort-Object FullName | ForEach-Object {
-    [ordered]@{
-        path   = $_.FullName.Substring($stage.Length + 1).Replace("\", "/")
-        size   = $_.Length
-        sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+function Describe($path, $name) {
+    $f = Get-Item $path
+    [ordered]@{ path = $name; size = $f.Length; sha256 = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower() }
+}
+function FilesIn($dir) {
+    Get-ChildItem $dir -Recurse -File | Sort-Object FullName | ForEach-Object {
+        Describe $_.FullName $_.FullName.Substring($dir.Length + 1).Replace("\", "/")
     }
 }
-[ordered]@{ name = "TLDR Vocab"; version = $version; files = @($files) } |
-    ConvertTo-Json -Depth 4 | Set-Content (Join-Path $dist "manifest.json") -Encoding UTF8
 
+$files = @(FilesIn $stage)
 $plain = Join-Path $dist "TLDR-Vocab-$version.zip"
 Compress-Archive -Path $stage -DestinationPath $plain
 
 Copy-Item $exe $stage
 Copy-Item $lic (Join-Path $stage "AutoHotkey license.txt")
 Copy-Item (Join-Path $root "portable\Start TLDR Vocab.bat") $stage
+$extras = @(FilesIn $stage | Where-Object { $p = $_.path; -not ($files | Where-Object { $_.path -eq $p }) })
 $portable = Join-Path $dist "TLDR-Vocab-$version-portable.zip"
 Compress-Archive -Path $stage -DestinationPath $portable
+
+# files: the app (both zips); portable: what only the portable zip adds;
+# zips: each zip whole. Written without a BOM.
+$manifest = [ordered]@{
+    name     = "TLDR Vocab"
+    version  = $version
+    files    = $files
+    portable = $extras
+    zips     = [ordered]@{ plain = (Describe $plain (Split-Path $plain -Leaf)); portable = (Describe $portable (Split-Path $portable -Leaf)) }
+}
+[IO.File]::WriteAllText((Join-Path $dist "manifest.json"), ($manifest | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding $false))
 
 Remove-Item (Join-Path $dist "stage") -Recurse -Force
 Get-ChildItem $dist | ForEach-Object { "{0,-40} {1,10:N0} bytes" -f $_.Name, $_.Length }

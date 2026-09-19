@@ -14,7 +14,7 @@
 ;   SOUND     saying each word out loud as it is looked up
 ;   GENERAL   start as administrator - see the top of Vocab.ahk - a link to
 ;             the README's "Start with Windows", and the update check
-;             (Update.ahk)
+;             (Update.ahk, and Install.ahk for updating)
 ;   KEYS      the key rows from Keys.ahk
 ;
 ; "test" asks for the list of models, one row of it. That proves the key and
@@ -293,22 +293,19 @@ class Settings {
     }
 
     ; "check now": the answer goes on the line under it; a new version's line
-    ; is a link to its download page
+    ; opens the update window
     static CheckNow() {
         this.updateNote.SetFont("c" CMuted)
         this.updateNote.Text := "asking GitHub" Chr(0x2026)
         Update.Check(false, ObjBindMethod(Settings, "UpdateAnswer"))
     }
 
-    static UpdateAnswer(text, found, url) {
+    static UpdateAnswer(text, found) {
         this.updateNote.SetFont("c" (found ? CGreen : CMuted))
-        this.updateNote.Text := found ? text " Click here to download it." : text
-        this.updateUrl := found ? url : ""
+        this.updateNote.Text := found ? text " Click here to see what is new and update." : text
         if (found && !LinkHwnds.Has(this.updateNote.Hwnd))
-            Link(this.updateNote, (*) => (Settings.updateUrl != "") && Run(Settings.updateUrl))
+            Link(this.updateNote, (*) => Update.found && Install.Offer(Update.found))
     }
-
-    static updateUrl := ""
 
     static Note(msg, color := "") {
         this.noteBox.SetFont("c" (color != "" ? color : CMuted))

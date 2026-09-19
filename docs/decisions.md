@@ -106,13 +106,46 @@ at `:` or `;` left Gemini half a sentence of context.
 
 ## The update check (1.1.0)
 
-- **It only tells; it does not update.** Replacing its own files while running is possible, but a half
-  update is the one failure that breaks the app for good, so for now updating stays unzipping the new
-  version. The check asks GitHub's releases list, not the "latest" address, because "latest" skips test
+- **In 1.1.0 it only told; it did not update.** A half update is the one failure that breaks the app for
+  good, so updating itself waited for 1.2.0, built around exactly that (below). The check asks GitHub's releases list, not the "latest" address, because "latest" skips test
   versions and someone on a beta should hear of the next beta.
 - **A test version is offered only to someone already on one** — the same rule GitHub's own "latest"
   link follows. Version order: 1.10 after 1.2, and 1.1.0-beta.2 before 1.1.0.
 - **Once a day,** and silent unless there is news: a failed check at start says nothing (it is logged).
+
+## Updating itself (1.2.0)
+
+1.1.0 only told; 1.2.0 can do it, and the user picks — "Update now" or the download page, never on its
+own. How it is built (the steps are at the top of `lib\Install.ahk`):
+
+- **Nothing in the folder changes until everything is checked.** The zip is downloaded, checked, unpacked
+  and every file checked again in the temp folder; the new `Vocab.ahk` must pass AutoHotkey's syntax check
+  with the AutoHotkey that will run it. Any failure up to there is a message and nothing else.
+- **Check sums from `manifest.json`** (written by `build.ps1`): both zips and every file, SHA-256. The zip
+  is also checked against the digest GitHub itself keeps for each release file. Downloads come only from
+  this repository's release addresses for that exact version.
+- **Integrity, not identity.** This proves the files are the ones published on GitHub, over HTTPS. It
+  cannot prove who published them — if the GitHub account were taken over, so would be the updates. That
+  needs a code-signing certificate (paid, yearly); not worth it yet. It is the same trust as downloading
+  the zip from the release page by hand.
+- **A helper does the swap,** because a running app cannot replace itself: `lib\Updater.ahk`, run from a
+  copy in the temp folder with a copy of AutoHotkey — so nothing it runs from is in the folder, and the
+  portable `AutoHotkey64.exe` can be replaced too. It is the *old* version's helper that runs: the one the
+  user already has.
+- **Backup first, undo on failure.** Each file replaced is copied into `previous version\` first. A
+  failure half-way (a virus scanner or OneDrive holding a file — each copy is tried six times) puts every
+  file back. This was tested with a file held open on purpose.
+- **Checked after, too.** The new version, started with `--updated-from`, writes a marker when it has
+  started. If it quits or never writes it, the helper closes it, puts the old files back and starts the
+  old version. Tested with a release made to quit at start: back in eight seconds, identical files.
+- **What it may write is a list, and the list is checked twice** (the app, then the helper): paths inside
+  the folder only, never `Vocab.ini`, `words.json`, `cache\`, `errors.log`. Old code files a new version
+  dropped (`lib\*.ahk` only) are moved to the backup, so a leftover can never be loaded by mistake.
+- **A git folder is refused** — the developer's own copy is updated with git, not over it.
+- **Found while testing:** AutoHotkey's `FileOpen` skips a UTF-8 BOM, so a file starting with one was
+  hashed without it and failed the check. The hash now rewinds to the first byte (and a test covers it).
+- **Trap:** a `for` loop's own variable is not visible inside a `() =>` closure in AutoHotkey 2.0 — the
+  swap code copies it into a normal variable first.
 
 ## Removed on purpose
 

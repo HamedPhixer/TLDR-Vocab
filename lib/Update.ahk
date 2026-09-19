@@ -4,9 +4,9 @@
 ; Once a day, a few seconds after start, the releases on GitHub are asked for
 ; (one small request to its public API, no account, through the same proxy
 ; setting as every lookup). If one is newer than VocabVersion, a tray notice
-; says so, and clicking it opens that release's page to download it. Nothing
-; is downloaded or changed here - updating is still unzipping the new version
-; over the old folder.
+; says so, and clicking it opens the update window (Install.ahk): what is
+; new, "update now", or the download page for updating by hand. Nothing is
+; downloaded or changed without that click.
 ;
 ; Which releases count: a test version (a version with a dash, 1.1.0-beta.2)
 ; only for someone already running one. Everyone else hears about finished
@@ -20,7 +20,7 @@
 #Requires AutoHotkey v2.0
 
 class Update {
-    static req := "", poller := "", manual := false, onDone := ""
+    static req := "", poller := "", manual := false, onDone := "", found := ""
 
     ; at start: once a day, unless switched off
     static Daily() {
@@ -35,7 +35,8 @@ class Update {
     }
 
     ; manual: asked for by hand - always answers. onDone(text, found) gets the
-    ; answer as well, for the settings window's own line.
+    ; answer as well, for the settings window's own line. The newer version,
+    ; when there is one, is kept in Update.found for the update window.
     static Check(manual := true, onDone := "") {
         if Update.req                           ; one check at a time
             return
@@ -66,23 +67,24 @@ class Update {
             Update.Tell(text, false)
             return
         }
-        v := news["version"], url := news["url"]
-        Notice(AppName " " v " is out - you have " VocabVersion ". Click to open the download page."
-            , AppName ": a new version", () => Run(url))
-        Update.Tell(AppName " " v " is out.", true, url)
+        Update.found := news
+        Notice(AppName " " news["version"] " is out - you have " VocabVersion ". Click to see what is new and update."
+            , AppName ": a new version", () => Install.Offer(news))
+        Update.Tell(AppName " " news["version"] " is out.", true)
     }
 
-    static Tell(text, found, url := "") {
+    static Tell(text, found) {
         if Update.onDone
-            Update.onDone.Call(text, found, url)
+            Update.onDone.Call(text, found)
     }
 
     ; The newest release in list (GitHub's answer) that is newer than mine, as
-    ; Map(version, url), or "" when there is none. Drafts never count; test
+    ; Map(version, url, notes, assets) - assets its files, each Map(name, url,
+    ; size, digest) - or "" when there is none. Drafts never count; test
     ; versions count only when mine is one.
     static Newest(list, mine) {
         pre := InStr(mine, "-") > 0
-        best := ""
+        best := "", files := ""
         for rel in list {
             if Dig(rel, "draft")
                 continue
@@ -90,8 +92,13 @@ class Update {
             if (v = "" || (Dig(rel, "prerelease") && !pre))
                 continue
             if (Update.Compare(v, mine) > 0 && (!best || Update.Compare(v, best["version"]) > 0))
-                best := Map("version", v, "url", Dig(rel, "html_url"))
+                best := Map("version", v, "url", Dig(rel, "html_url"), "notes", Dig(rel, "body"), "assets", [])
+                    , files := Dig(rel, "assets")
         }
+        if (best && files is Array)
+            for a in files
+                best["assets"].Push(Map("name", Dig(a, "name"), "url", Dig(a, "browser_download_url")
+                    , "size", Dig(a, "size"), "digest", Dig(a, "digest")))
         return best
     }
 

@@ -22,6 +22,26 @@ From the [latest release](https://github.com/HamedPhixer/TLDR-Vocab/releases/lat
 
 A dictionary icon appears in the tray. Right-click it for Settings — or click the gear in the word list.
 
+## Updating
+
+Your words, settings and saved lookups are never part of a download, so updating never touches them.
+
+**With one click.** When a new version is out, a notice says so (once a day; Settings → General can switch
+that off, or check now). Click it: a window shows what is new. **Update now** downloads the new version,
+checks every file against the check sums published with it, closes TLDR Vocab, swaps the files and starts
+it again — about ten seconds. If anything goes wrong on the way, nothing is changed; if the new version
+does not start, the old one is put back by itself. The version you had is kept in the **previous version**
+folder: to go back, copy what is in it over the TLDR Vocab folder.
+
+**By hand**, if you prefer:
+
+1. Right-click the tray icon → **Exit**.
+2. Download the new zip (the same kind you have — portable or not) and unzip it **into the same folder**.
+   When Windows asks, choose **Replace the files in the destination**.
+3. Start TLDR Vocab again.
+
+Updating with one click works from 1.2.0 on. From an older version, update by hand once.
+
 ## The keys
 
 All of them can be changed — or switched off — in Settings.
@@ -65,7 +85,8 @@ Your key stays in `Vocab.ini` on your PC. It is never part of this repository or
 - **Explanations and summaries:** Gemini, with your key
 
 Once a day it also asks GitHub whether there is a newer version of TLDR Vocab, and tells you if there
-is — nothing is downloaded or changed by itself. Settings → General switches that off.
+is — nothing is downloaded or changed unless you click **Update now**. Settings → General switches the
+check off.
 
 Behind a VPN, the *Proxy* setting follows Windows' own proxy by default. It takes **HTTP** proxies only
 (like `127.0.0.1:10809`) — SOCKS proxies do not work.
@@ -78,6 +99,7 @@ Behind a VPN, the *Proxy* setting follows Windows' own proxy by default. It take
 | `words.json` | the words you save — plain, readable JSON |
 | `cache\` | definitions and pronunciations, so a repeat is instant |
 | `errors.log` | only if something goes wrong |
+| `previous version\` | after an update: the version before it |
 
 To remove it: quit from the tray icon and delete the folder (and the Startup shortcut, if you made one).
 

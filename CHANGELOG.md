@@ -2,6 +2,23 @@
 
 Each version's notes. The release on GitHub is built from the section with its number.
 
+## 1.2.0-beta.1 — 2026-09-19
+
+A test version of 1.2.0.
+
+### New
+
+- **Update with one click.** When a new version is out, its notice opens a window with what is new
+  and **Update now**. TLDR Vocab downloads it, checks every file against the published check sums,
+  closes, swaps the files and starts again — or, if anything goes wrong, puts the old version back.
+  Your words, settings and saved lookups are never touched, and the version you had is kept in the
+  "previous version" folder.
+- The same window has **Download page**, for anyone who would rather update by hand; the README
+  explains how.
+
+This first version with it can update to the next one — updating *to* it from 1.1.0-beta.2 is still
+by hand, once.
+
 ## 1.1.0-beta.2 — 2026-09-19
 
 The second test version of 1.1.0.

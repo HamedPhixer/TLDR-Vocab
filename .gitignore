@@ -4,6 +4,7 @@ Vocab.ini
 words.json
 words.unreadable-*.json
 *.tmp
+previous version/
 cache/
 errors.log
 

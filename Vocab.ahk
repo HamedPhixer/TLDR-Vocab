@@ -109,7 +109,10 @@ Persistent
 ; carries on without it.
 if (!A_IsAdmin && IniRead(VocabIni(), "General", "RunAsAdmin", 0) = 1) {
     try {
-        Run('*RunAs "' A_AhkPath '" "' A_ScriptFullPath '"')
+        args := ""
+        for a in A_Args                         ; --updated-from, after an update
+            args .= ' "' a '"'
+        Run('*RunAs "' A_AhkPath '" "' A_ScriptFullPath '"' args)
         ExitApp
     }
 }
@@ -128,6 +131,7 @@ Keys.Start()
 BuildTray()
 NoKeyNotice()
 SetTimer(() => Update.Daily(), -8000)   ; once a day, once start-up has settled
+Install.Started()                       ; just updated? (Install.ahk)
 OnMessage(0x83, DictNcCalc)             ; WM_NCCALCSIZE
 OnMessage(0x84, DictHitTest)            ; WM_NCHITTEST
 OnMessage(0x86, DictNcActivate)         ; WM_NCACTIVATE

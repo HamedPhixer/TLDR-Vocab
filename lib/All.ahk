@@ -23,6 +23,11 @@
 ;   Keys       the keys, and recording new ones
 ;   Settings   the settings window
 ;   Update     is there a newer version? (asks GitHub once a day)
+;   Swap       putting a new version's files in place, with a backup
+;   Install    updating: download, check, hand over to the helper
+;
+; Not included: Updater.ahk, the helper Install starts to swap the files
+; while the app is closed - a script of its own.
 ;================================================================================
 #Requires AutoHotkey v2.0
 #Include %A_LineFile%\..\Json.ahk
@@ -44,3 +49,5 @@
 #Include %A_LineFile%\..\Keys.ahk
 #Include %A_LineFile%\..\Settings.ahk
 #Include %A_LineFile%\..\Update.ahk
+#Include %A_LineFile%\..\Swap.ahk
+#Include %A_LineFile%\..\Install.ahk

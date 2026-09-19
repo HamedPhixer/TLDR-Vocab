@@ -1,7 +1,8 @@
 <#
   run-tests.ps1 - check Vocab before a release
 
-  1. AutoHotkey's syntax check of Vocab.ahk and everything in lib\ and tools\
+  1. AutoHotkey's syntax check of Vocab.ahk and everything in lib\ and tools\,
+     and of lib\Updater.ahk (the update helper), which runs on its own
   2. tests\Logic.test.ahk   - the rules; no screen, no network
   3. tests\Screen.test.ahk  - real text read back by the real code (needs a
                               desktop; a window of test text shows for a few
@@ -31,7 +32,7 @@ Write-Host "AutoHotkey: $Ahk"
 $failed = 0
 
 # 1. syntax
-foreach ($f in @("$root\Vocab.ahk") + (Get-ChildItem "$root\tools\*.ahk" | % FullName)) {
+foreach ($f in @("$root\Vocab.ahk", "$root\lib\Updater.ahk") +(Get-ChildItem "$root\tools\*.ahk" | % FullName)) {
     $p = Start-Process $Ahk -ArgumentList "/Validate /ErrorStdOut `"$f`"" -PassThru -NoNewWindow -Wait -RedirectStandardError "$here\validate.err"
     $err = Get-Content "$here\validate.err" -Raw -ErrorAction SilentlyContinue
     if ($p.ExitCode -eq 0) { Write-Host "PASS syntax: $(Split-Path $f -Leaf)" }

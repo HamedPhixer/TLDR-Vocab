@@ -134,6 +134,110 @@ Check("update: a beta hears of a newer beta", Update.Newest(list, "1.1.0-beta.2"
 Check("update: a finished version hears only of finished ones", Update.Newest(list, "1.0.0")["version"], "1.1.0")
 Check("update: drafts never count, and nothing is newer", Update.Newest(list, "1.2.0-beta.1"), "")
 Check("update: up to date", Update.Newest(list, "1.1.0"), "")
+list[1]["body"] := "## New`n- **One** thing", list[1]["assets"] := [Map("name", "manifest.json"
+    , "browser_download_url", "https://x/manifest.json", "size", 10, "digest", "sha256:ab")]
+news := Update.Newest(list, "1.1.0-beta.2")
+Check("update: the notes and files come along", news["notes"] " | " news["assets"][1]["name"] " " news["assets"][1]["size"]
+    , "## New`n- **One** thing | manifest.json 10")
+Check("update: the notes as plain text", Install.NotesText(news["notes"]), "NEW`r`n" Chr(0x2022) " One thing")
+Check("update: wrapped note lines joined", Install.NotesText("- one`n  two`n  - three"), Chr(0x2022) " one two`r`n  " Chr(0x2022) " three")
+
+;--- updating: what may be written ---------------------------------------------
+for path in ["Vocab.ahk", "lib/Popup.ahk", "lib\Popup.ahk", "AutoHotkey64.exe", "Start TLDR Vocab.bat"]
+    CheckTrue("swap: may write " path, Swap.SafeRel(path))
+for path in ["", "../Vocab.ahk", "lib/../../x.ahk", "C:\Windows\x.dll", "\\server\x", "/lib/x.ahk", "Vocab.ini"
+        , "words.json", "WORDS.JSON", "errors.log", "cache/a.json", "previous version/Vocab.ahk", ".git/config"
+        , "words.unreadable-1.json", "lib/x.ahk.", "lib/x:y"]
+    CheckTrue("swap: may not write [" path "]", !Swap.SafeRel(path))
+
+; the release's files: only this app's own, for that version
+release := Map("version", "1.2.0", "assets", [
+    Map("name", "manifest.json", "url", RepoUrl "/releases/download/v1.2.0/manifest.json"),
+    Map("name", "a.zip", "url", "https://evil.example/HamedPhixer/TLDR-Vocab/releases/download/v1.2.0/a.zip"),
+    Map("name", "b.zip", "url", RepoUrl "/releases/download/v1.1.0/b.zip")])
+CheckTrue("install: its own release's file", IsObject(Install.Asset(release, "manifest.json")))
+Check("install: not from another address", Install.Asset(release, "a.zip"), "")
+Check("install: not from another version", Install.Asset(release, "b.zip"), "")
+Check("install: not a file it does not have", Install.Asset(release, "c.zip"), "")
+
+sum := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+entry(path) => Map("path", path, "size", 1, "sha256", sum)
+manifest(version := "1.2.0", extra := "") {
+    files := [entry("Vocab.ahk"), entry("lib/All.ahk"), entry("lib/Updater.ahk"), entry("lib/Swap.ahk")]
+    if (extra != "")
+        files.Push(entry(extra))
+    return Map("name", AppName, "version", version, "files", files, "portable", [entry("AutoHotkey64.exe")]
+        , "zips", Map("plain", Map("size", 5, "sha256", sum), "portable", Map("size", 6, "sha256", sum)))
+}
+Check("install: a good manifest", Install.CheckManifest(manifest(), "1.2.0", "plain") Install.CheckManifest(manifest(), "1.2.0", "portable"), "")
+Check("install: a portable copy gets AutoHotkey too", Install.Files(manifest(), "portable").Length " " Install.Files(manifest(), "plain").Length, "5 4")
+CheckHas("install: another version's manifest", Install.CheckManifest(manifest("1.3.0"), "1.2.0", "plain"), "1.3.0")
+CheckHas("install: a manifest naming the user's words", Install.CheckManifest(manifest(, "words.json"), "1.2.0", "plain"), "words.json")
+CheckHas("install: a manifest reaching outside", Install.CheckManifest(manifest(, "../x.ahk"), "1.2.0", "plain"), "../x.ahk")
+m := manifest(), m["zips"].Delete("portable")
+CheckHas("install: no check sum for the zip", Install.CheckManifest(m, "1.2.0", "portable"), "portable zip")
+m := manifest(), m["files"].RemoveAt(3)
+CheckHas("install: a version that could not update itself", Install.CheckManifest(m, "1.2.0", "plain"), "Updater.ahk")
+
+; SHA-256, against the published test values
+tmp := A_Temp "\tldr-vocab-test"
+try DirDelete(tmp, true)
+DirCreate(tmp)
+FileAppend("abc", tmp "\abc.txt", "UTF-8-RAW")
+FileAppend("", tmp "\empty.txt")
+Check("sha256: abc", Sha256File(tmp "\abc.txt"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+Check("sha256: nothing", Sha256File(tmp "\empty.txt"), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+FileAppend("abc", tmp "\bom.txt", "UTF-8")          ; EF BB BF, then abc
+Check("sha256: every byte, a BOM too", Sha256File(tmp "\bom.txt"), "1c28dc3f1f804a1ad9c9b4b4cf5e2658d16ad4ed08e3020d04a8d2865018947c")
+
+;--- updating: the swap, for real, in a temp folder ----------------------------
+; an installed copy with the user's own files, and a new version beside it
+put(path, text) {
+    SplitPath(path, , &dir)
+    DirCreate(dir)
+    try FileDelete(path)
+    FileAppend(text, path, "UTF-8-RAW")
+}
+read(path) => FileExist(path) ? FileRead(path, "UTF-8") : "(none)"
+app := tmp "\app", new := tmp "\new"
+setup() {
+    global app, new
+    try DirDelete(app, true)
+    try DirDelete(new, true)
+    for name, text in Map("Vocab.ahk", "old main", "lib\All.ahk", "old all", "lib\Gone.ahk", "old gone"
+            , "Vocab.ini", "my key", "words.json", "my words", "cache\w.json", "my cache", "errors.log", "my log")
+        put(app "\" name, text)
+    for name, text in Map("Vocab.ahk", "new main", "lib\All.ahk", "new all", "lib\Added.ahk", "new added")
+        put(new "\" name, text)
+}
+files := ["Vocab.ahk", "lib/All.ahk", "lib/Added.ahk"]
+setup()
+Check("swap: old code the new version dropped", Join(Swap.Leftovers(app, files), ","), "lib\Gone.ahk")
+why := Swap.Apply(app, new, files, Swap.Leftovers(app, files), "about")
+Check("swap: done", why, "")
+Check("swap: the new files", read(app "\Vocab.ahk") "," read(app "\lib\All.ahk") "," read(app "\lib\Added.ahk") "," read(app "\lib\Gone.ahk")
+    , "new main,new all,new added,(none)")
+Check("swap: the user's files untouched", read(app "\Vocab.ini") "," read(app "\words.json") "," read(app "\cache\w.json") "," read(app "\errors.log")
+    , "my key,my words,my cache,my log")
+bak := app "\" Swap.BackupName
+Check("swap: the old version kept", read(bak "\Vocab.ahk") "," read(bak "\lib\All.ahk") "," read(bak "\lib\Gone.ahk") "," read(bak "\about this folder.txt")
+    , "old main,old all,old gone,about")
+Check("swap: nothing of the user's in the backup", read(bak "\words.json") read(bak "\Vocab.ini"), "(none)(none)")
+
+; a file that cannot be replaced (held open, as a virus scanner might): all of
+; it is undone, and the folder is exactly as before
+setup()
+held := FileOpen(app "\lib\All.ahk", "r -rwd")
+why := Swap.Apply(app, new, files, Swap.Leftovers(app, files))
+held.Close()
+CheckTrue("swap: a locked file fails the update", why != "", "no failure reported")
+Check("swap: ...and everything is as before", read(app "\Vocab.ahk") "," read(app "\lib\All.ahk") "," read(app "\lib\Gone.ahk") "," read(app "\lib\Added.ahk")
+    , "old main,old all,old gone,(none)")
+Check("swap: ...the user's files too", read(app "\Vocab.ini") "," read(app "\words.json"), "my key,my words")
+Check("swap: a list naming the user's words is refused whole", Swap.Apply(app, new, ["Vocab.ahk", "words.json"], [])
+    , "the new version names a file it may not write: words.json")
+Check("swap: ...before anything changed", read(app "\Vocab.ahk") "," read(app "\words.json"), "old main,my words")
+try DirDelete(tmp, true)
 
 ;--- small helpers -------------------------------------------------------------
 Check("clean word: quotes and comma", CleanWord(Chr(0x201C) "Hello," Chr(0x201D)), "Hello")
