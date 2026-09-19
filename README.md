@@ -86,8 +86,47 @@ TLDR Vocab does not start with Windows by itself. To make it:
 
 From the next sign-in it starts on its own. To stop that, delete the shortcut from the Startup folder.
 
-If *Start as administrator* is on in Settings, Windows asks for permission at every sign-in. It is only needed
-for the selection key in programs that themselves run as administrator, so leave it off unless you need it.
+*Start as administrator* in Settings is off unless you turn it on. With it on, Windows asks for permission at
+every sign-in. It is only needed for the selection key in programs that themselves run as administrator — so
+leave it off, or use the way below, which starts it as administrator without asking.
+
+### As administrator, without the prompt
+
+Task Scheduler can start TLDR Vocab as administrator at every sign-in, with no prompt: Windows asks once,
+when the task is made. Use this *instead of* the Startup-folder shortcut, not as well.
+
+**The quick way.** Open PowerShell **as administrator** (right-click Start → *Terminal (Admin)*), go to the
+TLDR Vocab folder, and paste this:
+
+```powershell
+cd "C:\path\to\TLDR Vocab"      # the folder with Vocab.ahk in it
+$exe = if (Test-Path .\AutoHotkey64.exe) { "$PWD\AutoHotkey64.exe" } else { "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" }
+Register-ScheduledTask -TaskName "TLDR Vocab" `
+  -Action (New-ScheduledTaskAction -Execute $exe -Argument "`"$PWD\Vocab.ahk`"" -WorkingDirectory "$PWD") `
+  -Trigger (New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME) `
+  -Principal (New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest) `
+  -Settings (New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero))
+```
+
+To undo it: `Unregister-ScheduledTask -TaskName "TLDR Vocab" -Confirm:$false` (again as administrator).
+
+**By hand.** Start menu → **Task Scheduler** → **Create Task…** (not *Create Basic Task*):
+
+1. **General:** name it *TLDR Vocab*; tick **Run with highest privileges**; keep *Run only when user is logged on*.
+2. **Triggers → New:** *Begin the task:* **At log on**, *Specific user:* you.
+3. **Actions → New:** *Start a program*.
+   - *Program:* `AutoHotkey64.exe` in the TLDR Vocab folder (portable), or
+     `C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe` (AutoHotkey installed)
+   - *Add arguments:* the full path of `Vocab.ahk`, in quotes — `"C:\...\TLDR Vocab\Vocab.ahk"`
+   - *Start in:* the TLDR Vocab folder, without quotes
+4. **Conditions:** untick **Start the task only if the computer is on AC power** — or a laptop on battery
+   never starts it.
+5. **Settings:** untick **Stop the task if it runs longer than 3 days** — or Windows closes TLDR Vocab
+   after three days.
+
+To undo it: find *TLDR Vocab* in the Task Scheduler Library and delete it.
+
+If you move the TLDR Vocab folder, make the task again: it points at the old place.
 
 ## Known limits
 
