@@ -4,8 +4,7 @@ Each version's notes. The release on GitHub is built from the section with its n
 
 ## Unreleased
 
-- README: start TLDR Vocab as administrator at sign-in without the Windows prompt, with Task Scheduler —
-  a command to paste, or the steps by hand.
+- README: start TLDR Vocab as administrator at sign-in without the Windows prompt, with Task Scheduler.
 
 ## 1.1.0-beta.1 — 2026-09-19
 

@@ -95,22 +95,7 @@ leave it off, or use the way below, which starts it as administrator without ask
 Task Scheduler can start TLDR Vocab as administrator at every sign-in, with no prompt: Windows asks once,
 when the task is made. Use this *instead of* the Startup-folder shortcut, not as well.
 
-**The quick way.** Open PowerShell **as administrator** (right-click Start → *Terminal (Admin)*), go to the
-TLDR Vocab folder, and paste this:
-
-```powershell
-cd "C:\path\to\TLDR Vocab"      # the folder with Vocab.ahk in it
-$exe = if (Test-Path .\AutoHotkey64.exe) { "$PWD\AutoHotkey64.exe" } else { "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" }
-Register-ScheduledTask -TaskName "TLDR Vocab" `
-  -Action (New-ScheduledTaskAction -Execute $exe -Argument "`"$PWD\Vocab.ahk`"" -WorkingDirectory "$PWD") `
-  -Trigger (New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME) `
-  -Principal (New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest) `
-  -Settings (New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero))
-```
-
-To undo it: `Unregister-ScheduledTask -TaskName "TLDR Vocab" -Confirm:$false` (again as administrator).
-
-**By hand.** Start menu → **Task Scheduler** → **Create Task…** (not *Create Basic Task*):
+Start menu → **Task Scheduler** → **Create Task…** (not *Create Basic Task*):
 
 1. **General:** name it *TLDR Vocab*; tick **Run with highest privileges**; keep *Run only when user is logged on*.
 2. **Triggers → New:** *Begin the task:* **At log on**, *Specific user:* you.
@@ -119,6 +104,10 @@ To undo it: `Unregister-ScheduledTask -TaskName "TLDR Vocab" -Confirm:$false` (a
      `C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe` (AutoHotkey installed)
    - *Add arguments:* the full path of `Vocab.ahk`, in quotes — `"C:\...\TLDR Vocab\Vocab.ahk"`
    - *Start in:* the TLDR Vocab folder, without quotes
+
+   With AutoHotkey installed you can instead put `Vocab.ahk` itself as the *Program* and leave the
+   arguments empty: Windows then opens it the way a double-click does. That stops working if `.ahk` files
+   are ever set to open in an editor, which naming `AutoHotkey64.exe` never does.
 4. **Conditions:** untick **Start the task only if the computer is on AC power** — or a laptop on battery
    never starts it.
 5. **Settings:** untick **Stop the task if it runs longer than 3 days** — or Windows closes TLDR Vocab
