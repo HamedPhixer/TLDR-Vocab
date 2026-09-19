@@ -1,0 +1,6 @@
+# Windows line endings for everything Windows runs; the icon untouched
+* text=auto
+*.ahk text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.png binary

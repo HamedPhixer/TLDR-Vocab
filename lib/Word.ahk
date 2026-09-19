@@ -1,0 +1,121 @@
+;================================================================================
+; Word.ahk - the word under the mouse, and the selected text
+;================================================================================
+#Requires AutoHotkey v2.0
+
+LookupUnderMouse(*) {
+    MouseGetPos(&mx, &my)
+    if Popup.visible {                  ; never read our own popup back
+        Popup.Close()
+        Sleep 40
+    }
+    try hit := WordAtPoint(mx, my)
+    catch as e {
+        VocabLog("OCR: " e.Message)
+        Popup.Message("Could not read the screen: " e.Message, mx, my)
+        return
+    }
+    if !hit {
+        Popup.Message("No text under the pointer", mx, my)
+        return
+    }
+    StartLookup(hit.word, hit.context, Popup, hit, true)
+}
+
+LookupSelection(*) {
+    MouseGetPos(&mx, &my)
+    ; or Ctrl+C goes out as Ctrl+Win+C - or with whatever the key was changed to
+    for k in ["LWin", "RWin", "Alt", "Shift", "Ctrl"]
+        KeyWait(k, "T1")
+    saved := ClipboardAll()
+    A_Clipboard := ""
+    Send("^c")
+    text := ClipWait(0.6) ? A_Clipboard : ""
+    A_Clipboard := saved
+    saved := ""
+    text := Trim(RegExReplace(text, "\s+", " "))
+    if (text = "") {
+        LookupUnderMouse()
+        return
+    }
+    if (StrLen(text) > 3000)            ; the paragraph lookup's own limit
+        text := SubStr(text, 1, 3000)
+    ; Any length, sent where it fits: a few words to the dictionary, a
+    ; sentence or a short run of them to the sentence card (explained and
+    ; translated), anything longer to the paragraph card (summarised) - the
+    ; same split the click keys make.
+    n := CountWords(text)
+    mode := (n <= 4) ? "word" : (n <= SentenceMaxWords()) ? "sentence" : "paragraph"
+    StartLookup((mode != "word" || InStr(text, " ")) ? text : CleanWord(text), "", Popup
+        , {x: mx, y: my - 10, w: 1, h: 20}, false, mode)
+}
+
+; OCR a band around the pointer and take the word it is on - or nearly on.
+; The band is centred on the pointer both ways, and enlarged before reading.
+;
+; HOW MUCH TO ENLARGE, AND WHY IT MATTERS
+; Windows' reader has a sweet spot. Enlarging helps small text and ruins big
+; text: a 100 px subtitle doubled comes out over 200 px tall and reads as
+; nothing at all, or - worse - as pieces of itself ("plu", "lung", "e"). So
+; the fallbacks zoom OUT before they zoom in:
+;
+;   1.5x on a wide band    ordinary text and subtitles, measured good from
+;                          8 px UI labels up to 100 px subtitles
+;   1x on a taller band    text bigger still, and a second opinion
+;   3x on a small band     genuinely tiny print, last because zooming in is
+;                          what breaks large text
+;
+; Measured on rendered text at 8, 12, 14, 37, 66 and 103 px: the first band
+; alone reads every one of them, from any pointer position on the word.
+WordAtPoint(mx, my) {
+    vx := SysGet(76), vy := SysGet(77), vw := SysGet(78), vh := SysGet(79)
+    passes := [{w: 800, h: 220, s: 1.5}, {w: 900, h: 300, s: 1}, {w: 480, h: 90, s: 3}]
+    for i, pass in passes {
+        rx := Max(vx, Min(mx - pass.w // 2, vx + vw - pass.w))
+        ry := Max(vy, Min(my - pass.h // 2, vy + vh - pass.h))
+        lines := Ocr.Screen(rx, ry, pass.w, pass.h, pass.s)
+        ; A word running into the edge of the band is a word cut in half, and
+        ; half a word is worse than another try - unless this was the last one.
+        edge := (i < passes.Length) ? [Round(pass.w * pass.s), Round(pass.h * pass.s)] : ""
+        if (hit := PickWord(lines, (mx - rx) * pass.s, (my - ry) * pass.s, edge)) {
+            k := pass.s
+            return {word: hit.word, context: hit.context
+                , x: rx + hit.x / k, y: ry + hit.y / k, w: hit.w / k, h: hit.h / k}
+        }
+    }
+    return ""
+}
+
+; edge, when given, is [width, height] of the band being read: words touching
+; its rim are skipped, because the band cut them.
+PickWord(lines, px, py, edge := "") {
+    best := "", bestD := 1e9
+    for li, row in lines
+        for wi, w in row.words {
+            if (edge && (w.x <= 2 || w.y <= 2
+                || w.x + w.w >= edge[1] - 2 || w.y + w.h >= edge[2] - 2))
+                continue
+            dx := (px < w.x) ? w.x - px : (px > w.x + w.w) ? px - w.x - w.w : 0
+            dy := (py < w.y) ? w.y - py : (py > w.y + w.h) ? py - w.y - w.h : 0
+            d := Sqrt(dx * dx + dy * dy)
+            if (d < bestD && d <= Max(w.h * 0.6, 10))
+                bestD := d, best := [li, wi]
+        }
+    if !best
+        return ""
+    w := lines[best[1]].words[best[2]]
+    word := CleanWord(w.text)
+    if (word = "")
+        return ""
+    ; The example kept with the word: the one sentence it sits in, cut at the
+    ; full stops. Whole lines dragged in the tail of the sentence before and
+    ; whatever sat under it on screen - a chat's "11 minutes ago".
+    ctx := BlockAt(lines, w.x + w.w / 2, w.y + w.h / 2, false)
+    return {word: word, context: ctx ? ctx.text : "", x: w.x, y: w.y, w: w.w, h: w.h}
+}
+
+CleanWord(t) {
+    t := StrReplace(StrReplace(t, Chr(0x2019), "'"), Chr(0x2018), "'")
+    t := RegExReplace(t, "^[^A-Za-z0-9]+|[^A-Za-z0-9]+$")
+    return RegExReplace(t, "i)'s$")
+}

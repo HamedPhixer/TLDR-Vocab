@@ -1,0 +1,20 @@
+# Yours, never shared: settings with your Gemini key, your words, and what
+# the app keeps while it runs
+Vocab.ini
+words.json
+words.unreadable-*.json
+*.tmp
+cache/
+errors.log
+
+# What the tests and tools write
+tests/results-*.txt
+tests/Vocab.ini
+tests/cache/
+tests/errors.log
+tools/*.bmp
+tools/ocrdebug.txt
+
+# What build.ps1 makes, and a local AutoHotkey for it
+dist/
+AutoHotkey64.exe

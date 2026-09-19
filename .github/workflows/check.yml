@@ -1,0 +1,23 @@
+# Every push and pull request: AutoHotkey's syntax check and the logic tests.
+name: Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get AutoHotkey 2.0.19
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://www.autohotkey.com/download/2.0/AutoHotkey_2.0.19.zip -OutFile ahk.zip
+          Expand-Archive ahk.zip -DestinationPath ahk
+
+      - name: Test (syntax and logic)
+        shell: pwsh
+        run: .\tests\run-tests.ps1 -Ahk .\ahk\AutoHotkey64.exe -NoScreen

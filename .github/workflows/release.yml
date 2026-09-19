@@ -1,0 +1,39 @@
+# Push a tag like v1.0.1 (matching VocabVersion in lib/Config.ahk) and this
+# tests the app, builds both zips and publishes them as a GitHub release.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get AutoHotkey 2.0.19
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://www.autohotkey.com/download/2.0/AutoHotkey_2.0.19.zip -OutFile ahk.zip
+          Expand-Archive ahk.zip -DestinationPath ahk
+
+      - name: Test (syntax and logic - the screen tests need a real desktop)
+        shell: pwsh
+        run: .\tests\run-tests.ps1 -Ahk .\ahk\AutoHotkey64.exe -NoScreen
+
+      - name: Build
+        shell: pwsh
+        run: .\build.ps1 -AhkDir .\ahk
+
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = $env:GITHUB_REF_NAME.TrimStart("v")
+          gh release create $env:GITHUB_REF_NAME dist/TLDR-Vocab-$v-portable.zip dist/TLDR-Vocab-$v.zip dist/manifest.json `
+            --title "TLDR Vocab $v" --generate-notes
