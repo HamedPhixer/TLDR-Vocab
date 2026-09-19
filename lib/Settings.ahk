@@ -12,8 +12,9 @@
 ;             the model (empty = automatic)
 ;   NETWORK   the proxy - see Http.Proxy in Lookup.ahk
 ;   SOUND     saying each word out loud as it is looked up
-;   GENERAL   start as administrator - see the top of Vocab.ahk - and a
-;             link to the README's "Start with Windows"
+;   GENERAL   start as administrator - see the top of Vocab.ahk - a link to
+;             the README's "Start with Windows", and the update check
+;             (Update.ahk)
 ;   KEYS      the key rows from Keys.ahk
 ;
 ; "test" asks for the list of models, one row of it. That proves the key and
@@ -37,16 +38,9 @@ GeminiKeyUrl() => "https://aistudio.google.com/apikey"
 NoKeyNotice() {
     if (GeminiKey() != "")
         return
-    OnMessage(0x404, NoKeyClick)                ; the tray icon's own messages
-    TrayTip("Word lookups work without it. For plain-English explanations and summaries, "
-        . "add a free Gemini key - click here, or tray icon > Settings.", AppName ": no Gemini key", 1)
-}
-
-NoKeyClick(wParam, lParam, *) {
-    if ((lParam & 0xFFFF) = 0x405) {            ; NIN_BALLOONUSERCLICK
-        OnMessage(0x404, NoKeyClick, 0)
-        Settings.Show("gemini")
-    }
+    Notice("Word lookups work without it. For plain-English explanations and summaries, "
+        . "add a free Gemini key - click here, or tray icon > Settings.", AppName ": no Gemini key"
+        , () => Settings.Show("gemini"))
 }
 
 ; The line a card shows where Gemini's part would be, when there is no key or
@@ -62,7 +56,7 @@ KeyTrouble(lk) => (lk && (!lk.ai.enabled || InStr(lk.ai.note, "key rejected")))
 
 class Settings {
     static g := "", pane := "", key := "", showLink := "", model := "", proxy := "", noteBox := ""
-    static auto := "", admin := "", lang := "", scope := "", saver := "", tester := "", req := "", shown := false
+    static auto := "", admin := "", updates := "", updateNote := "", lang := "", scope := "", saver := "", tester := "", req := "", shown := false
     static W := 608                 ; the content is laid out 600 wide, plus the scroll thumb
 
     ; Opens where it was left, as tall as it was left - or as tall as its
@@ -203,6 +197,14 @@ class Settings {
         c.SetFont("s9 Norm c" CBlue, FontUI)
         Link(c.Add("Text", "x22 y" y " BackgroundTrans +0x80", "Start " AppName " with Windows - how")
             , (*) => Run(RepoUrl "#start-with-windows"))
+        y += 34
+        this.updates := this.Check(c, y, "Check for updates when " AppName " starts")
+        c.SetFont("s9 Norm c" CBlue, FontUI)
+        Link(c.Add("Text", "x360 y" (y + 2) " w70 BackgroundTrans +0x80", "check now"), (*) => Settings.CheckNow())
+        y += 24
+        c.SetFont("s8 Norm c" CDim, FontUI)
+        this.updateNote := c.Add("Text", "x44 y" y " w534 BackgroundTrans +0x80"
+            , "Once a day it asks GitHub for the newest version and only tells you if there is one.")
         y += 30
 
         ; KEYS
@@ -247,6 +249,7 @@ class Settings {
         this.proxy.Value := (px = "auto") ? "" : px
         this.auto.Value := SpeakAuto ? 1 : 0
         this.admin.Value := (IniRead(ini, "General", "RunAsAdmin", 0) = 1) ? 1 : 0
+        this.updates.Value := (IniRead(ini, "General", "CheckUpdates", 1) = 1) ? 1 : 0
         for i, l in Lang.List
             if (l.code = Lang.Code())
                 this.lang.Value := i
@@ -267,6 +270,7 @@ class Settings {
             SpeakAuto := this.auto.Value
             IniWrite(SpeakAuto, ini, "Sound", "SayOnLookup")
             IniWrite(this.admin.Value, ini, "General", "RunAsAdmin")
+            IniWrite(this.updates.Value, ini, "General", "CheckUpdates")
             IniWrite((this.scope.Value = 2) ? 1 : 10, ini, "Translation", "Sentences")
         } catch as e
             this.Note("Could not write Vocab.ini: " e.Message, CRed)
@@ -287,6 +291,24 @@ class Settings {
         Lang.Set(Lang.List[this.lang.Value].code)
         Dict.Refresh()
     }
+
+    ; "check now": the answer goes on the line under it; a new version's line
+    ; is a link to its download page
+    static CheckNow() {
+        this.updateNote.SetFont("c" CMuted)
+        this.updateNote.Text := "asking GitHub" Chr(0x2026)
+        Update.Check(false, ObjBindMethod(Settings, "UpdateAnswer"))
+    }
+
+    static UpdateAnswer(text, found, url) {
+        this.updateNote.SetFont("c" (found ? CGreen : CMuted))
+        this.updateNote.Text := found ? text " Click here to download it." : text
+        this.updateUrl := found ? url : ""
+        if (found && !LinkHwnds.Has(this.updateNote.Hwnd))
+            Link(this.updateNote, (*) => (Settings.updateUrl != "") && Run(Settings.updateUrl))
+    }
+
+    static updateUrl := ""
 
     static Note(msg, color := "") {
         this.noteBox.SetFont("c" (color != "" ? color : CMuted))

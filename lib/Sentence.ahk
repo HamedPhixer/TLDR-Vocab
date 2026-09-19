@@ -13,7 +13,7 @@
 ;                   translation still stands on its own.
 ;
 ; Everything else is the word popup's and is reused unchanged: the scrolling,
-; "+ save", "look up again", the pin, the placing. Only the card is
+; "+ save", "look up again", the speaker, the pin, the placing. Only the card is
 ; different, and it is drawn here.
 ;
 ; READING THE SENTENCE OFF THE SCREEN
@@ -239,7 +239,10 @@ RenderSentence(g, W, st, owner) {
     saved := Store.Find(st.word)
     action := (st.flash != "") ? st.flash : saved ? "saved " Chr(0x2713) : "+ save"
 
-    ModeSwitch(g, f, st, owner)
+    sx := ModeSwitch(g, f, st, owner)
+    g.SetFont("s11 Norm c" CMuted, "Segoe MDL2 Assets")         ; the speaker glyph
+    Link(g.Add("Text", "x" sx " y" f.y " w20 BackgroundTrans +0x80", Chr(0xE767))
+        , (*) => Speak.Say(st.word))
     acts := [PinAction(owner), {text: action, color: (saved || st.flash != "") ? CMuted : CGreen, w: 84, fn: (*) => owner.Save()}]
     if lk
         acts.Push({text: "look up again", color: CBlue, w: 94, fn: (*) => owner.Again()})

@@ -38,8 +38,8 @@
 ;   Esc                 closes the lookup popup, while one is showing
 ;
 ; THE POPUP
-;   "look up again" runs the whole lookup once more, for when Gemini or a
-;   dictionary did not answer.
+;   The speaker beside the word says it out loud; "look up again" runs the
+;   whole lookup once more, for when Gemini or a dictionary did not answer.
 ;   If the screen was misread - a player's highlight box cutting the first and
 ;   last letter, say - Gemini says what the word really was and the lookup
 ;   starts over on the right one, with "read as ..." showing what it saw.
@@ -127,6 +127,7 @@ SetScriptIcon()
 Keys.Start()
 BuildTray()
 NoKeyNotice()
+SetTimer(() => Update.Daily(), -8000)   ; once a day, once start-up has settled
 OnMessage(0x83, DictNcCalc)             ; WM_NCCALCSIZE
 OnMessage(0x84, DictHitTest)            ; WM_NCHITTEST
 OnMessage(0x86, DictNcActivate)         ; WM_NCACTIVATE

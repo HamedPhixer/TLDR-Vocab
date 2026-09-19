@@ -7,7 +7,7 @@
 ; the notices and the update check. The files keep the short name Vocab.
 global AppName := "TLDR Vocab"
 global RepoUrl := "https://github.com/HamedPhixer/TLDR-Vocab"     ; the README and the releases
-global VocabVersion := "1.1.0-beta.1"      ; MAJOR.MINOR.PATCH - see "Releasing" in README.md
+global VocabVersion := "1.1.0-beta.2"      ; MAJOR.MINOR.PATCH - see "Releasing" in README.md
 
 ; The Gemini key, the proxy, the sound and the keys are set in the settings
 ; window (tray menu > Settings, see Settings.ahk), which keeps them in
@@ -38,13 +38,14 @@ global CGreen := "00E676", CAmber := "FFB300", CRed := "FF4D6D", CBlue := "3D9BE
 global FontUI := "Segoe UI"
 global FontFa := "Segoe UI"     ; has full Persian coverage; "Tahoma" also works
 
-; Hearing the word: each word said out loud as it is looked up, when Settings >
-; SOUND says so (kept in Vocab.ini). A recording from Google's free endpoint,
-; kept in cache\audio-us afterwards, or the Windows voice offline - see the top
-; of Speak.ahk. This is the default.
+; Hearing the word: the speaker on every card, and - when Settings > SOUND says
+; so (kept in Vocab.ini) - each word said out loud as it is looked up. A
+; recording from Google's free endpoint, kept in cache\audio-us afterwards, or
+; the Windows voice offline - see the top of Speak.ahk. This is the default.
 global SpeakAuto := 0           ; 1 = say every word as you look it up
 
 global PopW    := 400           ; popup width
 global PopWide := 520           ; and for a paragraph summary, which is wider
 global PopMaxH := 560           ; the tallest the popup gets before it scrolls
 global LinkHwnds := Map()       ; clickable texts, for the hand cursor
+global NoticeClick := ""        ; what clicking the latest tray notice does (Notice, App.ahk)

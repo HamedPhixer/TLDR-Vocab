@@ -104,11 +104,20 @@ at `:` or `;` left Gemini half a sentence of context.
 - **Pinning is one way:** a pinned card closes, it does not unpin. Unpinning would need to decide what
   happens to the live card already showing.
 
+## The update check (1.1.0)
+
+- **It only tells; it does not update.** Replacing its own files while running is possible, but a half
+  update is the one failure that breaks the app for good, so for now updating stays unzipping the new
+  version. The check asks GitHub's releases list, not the "latest" address, because "latest" skips test
+  versions and someone on a beta should hear of the next beta.
+- **A test version is offered only to someone already on one** — the same rule GitHub's own "latest"
+  link follows. Version order: 1.10 after 1.2, and 1.1.0-beta.2 before 1.1.0.
+- **Once a day,** and silent unless there is news: a failed check at start says nothing (it is logged).
+
 ## Removed on purpose
 
-- **The speaker button beside each word** (and its setting). It was rarely clicked and took room in
-  every card header. Saying each word out loud as it is looked up stays: that is a setting, not a
-  button, and uses the same voice code.
+- **The setting that hid the speaker button.** The button is always there now; a switch to hide one
+  small icon was one setting too many.
 - **The word list's "lock"**, which switched off dragging and resizing. The gear to Settings took its
   place.
 

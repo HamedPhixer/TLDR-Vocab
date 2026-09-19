@@ -96,13 +96,14 @@ CheckTrue("pin: its x closes it for good", !PopupCard.pinned.Length && !first.g)
 ; Settings: a window that scrolls, and can be made shorter
 for a in Keys.List                      ; the key rows need keys; the defaults, not registered
     Keys.cur[a.id] := a.def
+IniDelete(VocabIni(), "Window", "SettingsH")     ; not the height a past run left it at
 Settings.Show()
 WinMove(40, 40, , , Settings.g.Hwnd)
-WinGetClientPos(, , , &ch, Settings.g.Hwnd)
 full := Settings.pane.contentH
 Settings.g.Move(, , , 400)
 Sleep 200
-CheckTrue("settings: can be made shorter than its content", Settings.pane.h < full && Settings.pane.h < ch, Settings.pane.h " of " full)
+WinGetClientPos(, , , &ch, Settings.g.Hwnd)
+CheckTrue("settings: can be made shorter than its content", Settings.pane.h < full && Settings.pane.h = ch, Settings.pane.h " of " full)
 WinGetPos(&sx, &sy, &sw, &sh, Settings.g.Hwnd)
 CheckTrue("settings: the wheel finds its pane", ScrollPane.At(sx + sw // 2, sy + sh // 2) == Settings.pane)
 Settings.pane.ScrollBy(200)

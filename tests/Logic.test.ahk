@@ -123,6 +123,18 @@ Check("language: Gemini's translation is filed as before", got ? got["persian"] 
 Check("pin: none on the word list", PinAction(Dict), "")
 CheckTrue("pin: a popup has one", IsObject(PinAction(Popup)))
 
+;--- the update check ----------------------------------------------------------
+for pair in [["1.0.1", "1.0.0"], ["1.10.0", "1.2.0"], ["1.1.0", "1.1.0-beta.2"], ["1.1.0-beta.2", "1.1.0-beta.1"]
+        , ["1.1.0-beta.10", "1.1.0-beta.2"], ["2.0.0-beta.1", "1.9.9"], ["1.1.0-rc.1", "1.1.0-beta.3"]]
+    Check("update: " pair[1] " is newer than " pair[2], Update.Compare(pair[1], pair[2]) " " Update.Compare(pair[2], pair[1]), "1 -1")
+Check("update: the same version", Update.Compare("1.1.0-beta.2", "1.1.0-beta.2"), 0)
+rel(tag, pre := false, draft := false) => Map("tag_name", "v" tag, "prerelease", pre, "draft", draft, "html_url", "u/" tag)
+list := [rel("1.2.0-beta.1", true), rel("1.1.0"), rel("1.1.0-beta.2", true), rel("1.3.0", false, true), rel("1.0.0")]
+Check("update: a beta hears of a newer beta", Update.Newest(list, "1.1.0-beta.2")["version"], "1.2.0-beta.1")
+Check("update: a finished version hears only of finished ones", Update.Newest(list, "1.0.0")["version"], "1.1.0")
+Check("update: drafts never count, and nothing is newer", Update.Newest(list, "1.2.0-beta.1"), "")
+Check("update: up to date", Update.Newest(list, "1.1.0"), "")
+
 ;--- small helpers -------------------------------------------------------------
 Check("clean word: quotes and comma", CleanWord(Chr(0x201C) "Hello," Chr(0x201D)), "Hello")
 Check("clean word: possessive", CleanWord("harbour's"), "harbour")

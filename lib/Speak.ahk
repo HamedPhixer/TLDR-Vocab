@@ -1,8 +1,9 @@
 ;================================================================================
 ; Speak.ahk - hear the word
 ;================================================================================
-; Speak.Say("word") and that is all - called for each word looked up when
-; Settings > SOUND "Say each word out loud" is on. What it does, in order:
+; Speak.Say("word") and that is all - called by the speaker on every card, and
+; for each word looked up when Settings > SOUND "Say each word out loud" is
+; on. What it does, in order:
 ;
 ;   1. cache\audio-us\<word>.mp3 a word heard once is instant and works offline
 ;   2. Google's speech endpoint  free, no key, the same family of addresses the

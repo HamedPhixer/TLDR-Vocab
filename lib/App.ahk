@@ -32,6 +32,8 @@ SayOnLookup=0
 ; 1 = start as administrator (Windows asks each time), so the selection key
 ; can copy from programs that run as administrator. Applies from next start.
 RunAsAdmin=0
+; 1 = once a day, ask GitHub whether there is a newer version
+CheckUpdates=1
 
 [Keys]
 ; Set in Settings. Only keys that differ from the default are listed;
@@ -82,12 +84,30 @@ BuildTray() {
     tm.Add("Open dictionary", (*) => Dict.Toggle())
     tm.Add()
     tm.Add("Settings", (*) => Settings.Show())
+    tm.Add("Check for updates", (*) => Update.Check(true))
     tm.Add("Open the " AppName " folder", (*) => Run('explorer.exe "' A_ScriptDir '"'))
     tm.Add()
     tm.Add("Reload", (*) => Reload())
     tm.Add("Exit", (*) => ExitApp())
     tm.Default := "Open dictionary"
     A_IconTip := Keys.TrayText()
+}
+
+; A tray notice that does something when clicked: onClick runs on a click on
+; the notice itself. Only the latest notice's click counts - a newer notice
+; replaces an older one on screen anyway.
+Notice(text, title, onClick := "", icon := 1) {
+    global NoticeClick := onClick
+    OnMessage(0x404, NoticeClicked)             ; the tray icon's own messages
+    TrayTip(text, title, icon)
+}
+
+NoticeClicked(wParam, lParam, *) {
+    global NoticeClick
+    if ((lParam & 0xFFFF) = 0x405 && NoticeClick) {      ; NIN_BALLOONUSERCLICK
+        fn := NoticeClick, NoticeClick := ""
+        fn()
+    }
 }
 
 ; A view is Popup or Dict: Begin() draws the word at once, Update() redraws as

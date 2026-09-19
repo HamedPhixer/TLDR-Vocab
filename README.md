@@ -64,6 +64,9 @@ Your key stays in `Vocab.ini` on your PC. It is never part of this repository or
   over.
 - **Explanations and summaries:** Gemini, with your key
 
+Once a day it also asks GitHub whether there is a newer version of TLDR Vocab, and tells you if there
+is — nothing is downloaded or changed by itself. Settings → General switches that off.
+
 Behind a VPN, the *Proxy* setting follows Windows' own proxy by default. It takes **HTTP** proxies only
 (like `127.0.0.1:10809`) — SOCKS proxies do not work.
 

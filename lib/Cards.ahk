@@ -238,16 +238,16 @@ CardLinks(g, x, y, acts) {
     return x
 }
 
-; The word, the phonetic, and the actions on the right (see CardLinks) - each
-; action with its own width: "delete" needs far less room than "click again to
-; delete".
+; The word, a speaker to hear it, the phonetic, and the actions on the right
+; (see CardLinks) - each action with its own width: "delete" needs far less
+; room than "click again to delete".
 Header(f, word, phon, actions) {
     g := f.g
     right := 0
     for a in actions
         if a
             right += a.w + 8
-    room := f.w - right - 8
+    room := f.w - right - 30                        ; 30: the speaker beside it
     ; Decided by the width the word really takes, not its letter count: two
     ; words of 22 letters overran "look up again" at full size. Too wide, and
     ; it is drawn again smaller and wrapping, the wide copy hidden.
@@ -261,6 +261,11 @@ Header(f, word, phon, actions) {
         wt.GetPos(&wx, &wy, &ww, &wh)
     }
     bottom := wy + wh, x := wx + ww + 8
+    g.SetFont("s11 Norm c" CMuted, "Segoe MDL2 Assets")         ; the speaker glyph
+    sp := Link(g.Add("Text", "x" x " y" (wy + wh - 24) " w20 BackgroundTrans +0x80", Chr(0xE767))
+        , (*) => Speak.Say(word))
+    sp.GetPos(, , &spw)
+    x += spw + 4
     if (phon != "") {
         g.SetFont("s9 Norm c" CMuted, FontUI)
         pt := g.Add("Text", "x" x " y" (wy + wh - 20) " BackgroundTrans +0x80", phon)

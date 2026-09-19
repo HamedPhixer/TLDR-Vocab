@@ -22,6 +22,7 @@
 ;   Box        drawing a box to read
 ;   Keys       the keys, and recording new ones
 ;   Settings   the settings window
+;   Update     is there a newer version? (asks GitHub once a day)
 ;================================================================================
 #Requires AutoHotkey v2.0
 #Include %A_LineFile%\..\Json.ahk
@@ -42,3 +43,4 @@
 #Include %A_LineFile%\..\Box.ahk
 #Include %A_LineFile%\..\Keys.ahk
 #Include %A_LineFile%\..\Settings.ahk
+#Include %A_LineFile%\..\Update.ahk
