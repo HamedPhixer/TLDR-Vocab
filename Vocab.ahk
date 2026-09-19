@@ -14,10 +14,12 @@
 ;                       of any size, from 8 px labels to full-screen subtitles;
 ;                       see WordAtPoint for why that takes three attempts.
 ;                       The click itself never reaches the window underneath.
-;   Shift + Win + Click TRANSLATE: the text under the mouse - up to ten
-;                       sentences, ending at any line that ends with a stop -
-;                       in plain English and in Persian. A selection of more
-;                       than a few words goes here too. See Sentence.ahk
+;   Shift + Win + Click TRANSLATE a passage: the sentences around the one
+;                       under the mouse - up to ten, ending at any line that
+;                       ends with a stop; or only that one sentence, in
+;                       Settings - in plain English and translated. A
+;                       selection of more than a few words goes here too.
+;                       See Sentence.ahk
 ;   Ctrl + Win + Click  SUMMARY: the whole block of text under the mouse,
 ;                       summarised in both languages - a game note, a blog
 ;                       paragraph. The screen is read whole and the block is
@@ -36,8 +38,8 @@
 ;   Esc                 closes the lookup popup, while one is showing
 ;
 ; THE POPUP
-;   The speaker beside the word says it out loud; "look up again" runs the
-;   whole lookup once more, for when Gemini or a dictionary did not answer.
+;   "look up again" runs the whole lookup once more, for when Gemini or a
+;   dictionary did not answer.
 ;   If the screen was misread - a player's highlight box cutting the first and
 ;   last letter, say - Gemini says what the word really was and the lookup
 ;   starts over on the right one, with "read as ..." showing what it saw.
@@ -66,8 +68,8 @@
 ; THE DICTIONARY WINDOW
 ;   An ordinary window with a taskbar button, not always on top. Drag it by
 ;   the top strip, resize it from any edge or corner; drag the gap between the
-;   list and the pane below to share the height differently. "lock" pins all
-;   three. The dash minimizes to the taskbar, the cross hides to the tray.
+;   list and the pane below to share the height differently. The gear opens
+;   Settings, the dash minimizes to the taskbar, the cross hides to the tray.
 ;   Typing in the search box filters your words; Enter looks the text up
 ;   online instead and shows the answer in the pane with its own "+ save".
 ;   Clicking a saved word shows everything kept for it - from the saved copy,

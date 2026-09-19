@@ -20,7 +20,7 @@ From the [latest release](https://github.com/HamedPhixer/TLDR-Vocab/releases/lat
 | `TLDR-Vocab-x.y.z-portable.zip` | **Most people.** Nothing to install: unzip anywhere, double-click `Start TLDR Vocab.bat`. |
 | `TLDR-Vocab-x.y.z.zip` | If you already have [AutoHotkey v2](https://www.autohotkey.com/) installed: unzip, double-click `Vocab.ahk`. |
 
-A dictionary icon appears in the tray. Right-click it for Settings.
+A dictionary icon appears in the tray. Right-click it for Settings — or click the gear in the word list.
 
 ## The keys
 
@@ -29,7 +29,7 @@ All of them can be changed — or switched off — in Settings.
 | Keys | What it does |
 |---|---|
 | **Win + Click** | The word you click on: meaning, pronunciation, translation, and the meaning that fits the sentence it is in. The click never reaches the window underneath. |
-| **Shift + Win + Click** | **Translate**: the text you click on, explained in plain English and translated. A line that ends with `. ! ? : ;` ends it; up to ten sentences are taken. |
+| **Shift + Win + Click** | **Translate a passage**: the sentences around the one you click, explained in plain English and translated — up to ten, stopping at a line that ends with `. ! ? : ;`. Or only the sentence you click: Settings → Translation. |
 | **Ctrl + Win + Click** | **Summary**: the whole block of text under the mouse, summarised in both languages — a game note, a blog post. |
 | **Win + `** | Whatever text is selected (\` is the key left of 1). |
 | **Shift + Win + `** | Draw a box: the screen dims, drag a rectangle over the text, let go. Only what is inside is read. |
@@ -63,6 +63,9 @@ Your key stays in `Vocab.ini` on your PC. It is never part of this repository or
   work, but could change or be blocked at any time — the fallbacks, and the Windows voice, then take
   over.
 - **Explanations and summaries:** Gemini, with your key
+
+Behind a VPN, the *Proxy* setting follows Windows' own proxy by default. It takes **HTTP** proxies only
+(like `127.0.0.1:10809`) — SOCKS proxies do not work.
 
 ## Files it makes, all in its own folder
 
@@ -141,6 +144,8 @@ Written for AutoHotkey v2.0.
 ## Credits
 
 Design and direction: **HamedPhixer**. Code written with Claude (Anthropic), via Claude Code.
+
+The icon: [Dictionary icons created by Magnific - Flaticon](https://www.flaticon.com/free-icons/dictionary).
 
 The portable download includes [AutoHotkey](https://www.autohotkey.com/) 2.0, free software under
 the GNU GPL v2 — see `AutoHotkey license.txt` in that zip, and its source at

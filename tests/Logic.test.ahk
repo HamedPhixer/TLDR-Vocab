@@ -56,6 +56,12 @@ Check("span: word example cuts at an ellipsis, not a semicolon"
     , SpanOf("He waited" Chr(0x2026) " Then he left; nobody saw.", "left", false), "Then he left; nobody saw.")
 CheckTrue("span: 10:30 does not split", SpanOf("We meet at 10:30 today. Bring it.", "today") = "We meet at 10:30 today. Bring it.")
 
+IniWrite(1, VocabIni(), "Translation", "Sentences")    ; the tests' own Vocab.ini
+Check("span: set to one sentence, only the one clicked", SpanOf(dialog, "the red"), "The other door, the red one.")
+Check("span: set to one sentence, even a short one", SpanOf(dialog, "No."), "No.")
+IniDelete(VocabIni(), "Translation", "Sentences")
+Check("span: back to the passage", SpanOf(dialog, "No."), dialog)
+
 RowOf(t) => ({text: t})
 CheckTrue("line ends: colon", EndsText(RowOf("It was not a limitation. Now:")))
 CheckTrue("line ends: quote after stop", EndsText(RowOf("he said." Chr(34))))

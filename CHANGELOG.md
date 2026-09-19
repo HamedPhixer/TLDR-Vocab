@@ -5,6 +5,14 @@ Each version's notes. The release on GitHub is built from the section with its n
 ## Unreleased
 
 - README: start TLDR Vocab as administrator at sign-in without the Windows prompt, with Task Scheduler.
+- Settings scrolls, and can be made shorter or taller; it opens as tall as you left it.
+- The word list's "lock" is replaced by a gear that opens Settings.
+- Translate a passage (was "translate a sentence"), with a new choice in Settings → Translation: the
+  sentences around the one you click (as before), or only that one sentence.
+- The speaker button beside each word is gone. Saying each word out loud as it is looked up stays, in
+  Settings → Sound.
+- Settings says the proxy must be HTTP; SOCKS proxies do not work.
+- Credit for the icon (Magnific, Flaticon) in the README.
 
 ## 1.1.0-beta.1 — 2026-09-19
 

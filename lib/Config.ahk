@@ -38,11 +38,10 @@ global CGreen := "00E676", CAmber := "FFB300", CRed := "FF4D6D", CBlue := "3D9BE
 global FontUI := "Segoe UI"
 global FontFa := "Segoe UI"     ; has full Persian coverage; "Tahoma" also works
 
-; Hearing the word. The speaker beside it plays a recording from Google's
-; free endpoint, kept in cache\audio-us afterwards, and falls back to the Windows
-; voice offline. English only - see the top of Speak.ahk. These are the
-; defaults; Settings > SOUND overrides them from Vocab.ini.
-global SpeakOn   := 1           ; show the speaker buttons at all
+; Hearing the word: each word said out loud as it is looked up, when Settings >
+; SOUND says so (kept in Vocab.ini). A recording from Google's free endpoint,
+; kept in cache\audio-us afterwards, or the Windows voice offline - see the top
+; of Speak.ahk. This is the default.
 global SpeakAuto := 0           ; 1 = say every word as you look it up
 
 global PopW    := 400           ; popup width

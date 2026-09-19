@@ -180,6 +180,7 @@ class PopupCard {
                     break
                 }
             this.pane.Clear()
+            this.pane.Forget()
             DropGui(this.g)
             this.g := ""
             return
@@ -236,17 +237,6 @@ class PopupCard {
         this.st.flash := ((res = "saved") ? "saved " : "updated ") Chr(0x2713)
         this.Render()
         Dict.Refresh()
-    }
-
-    ; every card on screen whose pane the wheel might be over: the live one
-    ; first, as it sits on top of any pinned one it covers
-    static Panes() {
-        out := []
-        if Popup.visible
-            out.Push(Popup.pane)
-        for card in PopupCard.pinned
-            out.Push(card.pane)
-        return out
     }
 
     ; A pinned card is dragged by any part of it that is not a link: the click

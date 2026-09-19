@@ -13,7 +13,7 @@
 ;                   translation still stands on its own.
 ;
 ; Everything else is the word popup's and is reused unchanged: the scrolling,
-; "+ save", "look up again", the speaker, the placing. Only the card is
+; "+ save", "look up again", the pin, the placing. Only the card is
 ; different, and it is drawn here.
 ;
 ; READING THE SENTENCE OFF THE SCREEN
@@ -25,8 +25,9 @@
 ; 2. The sentences: that text cut at the stops inside it - a stop followed by
 ;    a space and a word - and up to ten of them taken, the one the pointer is
 ;    on first, then the next, then the one before. Bits of one to three words
-;    ("Wait." "No.") do not count towards the ten. That is all SpanRange
-;    does; for anything more exact there is the box.
+;    ("Wait." "No.") do not count towards the ten. Or, set in Settings, only
+;    the sentence clicked. That is all SpanRange does; for anything more
+;    exact there is the box.
 ; What was taken is outlined for a moment, like the summary's block.
 ;================================================================================
 #Requires AutoHotkey v2.0
@@ -169,16 +170,23 @@ EndsText(row) => RegExMatch(row.text, StopMark() "$")
 ; they have no pointer to cut sentences around, so it goes by length.
 SentenceMaxWords() => 80
 
+; How many sentences Translate takes: 10 (the passage, the default) or 1
+; (only the sentence clicked) - Settings > TRANSLATION, [Translation]
+; Sentences in Vocab.ini. Read on every lookup, so a change counts at once.
+TranslateScope() => (IniRead(VocabIni(), "Translation", "Sentences", 10) = 1) ? 1 : 10
+
 ; The sentences to take, as [first character, last character] of all, given
 ; the character where the pointed-at word starts. The text is cut at every
 ; stop followed by a space (see StopMark); the one the pointer is on is
-; taken, then the next, then the one before, and so on, until ten are taken
-; or none are left - the text itself already ends at a line that finishes on
-; a stop, so ten is only a safety limit. A bit of one to three words ("Wait."
-; "No.") comes along but does not count. whole := false takes only the
-; sentence the word is in - the example a word lookup keeps.
+; taken, then the next, then the one before, and so on, until TranslateScope
+; are taken or none are left - the text itself already ends at a line that
+; finishes on a stop, so ten is only a safety limit. A bit of one to three
+; words ("Wait." "No.") comes along but does not count. Set to one, only the
+; sentence clicked is taken, bits and all: exactly up to its first stop.
+; whole := false takes only the sentence the word is in - the example a word
+; lookup keeps.
 SpanRange(all, at, whole := true) {
-    static most := 10
+    most := whole ? TranslateScope() : 1
     ; the example kept with a word is a whole sentence: there only . ! ? and
     ; the ellipsis cut, or a colon would leave Gemini half a sentence of context
     tail := (whole ? StopMark() : "[.!?" Chr(0x2026) "][" Chr(34) Chr(0x201D) Chr(0x2019) "'\)\]]?") "(\s|$)"
@@ -196,7 +204,7 @@ SpanRange(all, at, whole := true) {
             k := i
             break
         }
-    if !whole
+    if (!whole || most = 1)
         return spans[k]
     counts := (i) => CountWords(SubStr(all, spans[i][1], spans[i][2] - spans[i][1] + 1)) > 3
     a := k, b := k, taken := counts(k) ? 1 : 0, nextSide := true
@@ -231,12 +239,7 @@ RenderSentence(g, W, st, owner) {
     saved := Store.Find(st.word)
     action := (st.flash != "") ? st.flash : saved ? "saved " Chr(0x2713) : "+ save"
 
-    sx := ModeSwitch(g, f, st, owner)
-    if SpeakOn {
-        g.SetFont("s11 Norm c" CMuted, "Segoe MDL2 Assets")
-        Link(g.Add("Text", "x" sx " y" f.y " w20 BackgroundTrans +0x80", Chr(0xE767))
-            , (*) => Speak.Say(st.word))
-    }
+    ModeSwitch(g, f, st, owner)
     acts := [PinAction(owner), {text: action, color: (saved || st.flash != "") ? CMuted : CGreen, w: 84, fn: (*) => owner.Save()}]
     if lk
         acts.Push({text: "look up again", color: CBlue, w: 94, fn: (*) => owner.Again()})

@@ -25,11 +25,7 @@ Model=
 ; none = always connect directly.
 Proxy=auto
 
-[Window]
-Locked=0
-
 [Sound]
-Speaker=1
 SayOnLookup=0
 
 [General]

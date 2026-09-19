@@ -85,16 +85,39 @@ WrapByWords(c, text, w) {
 }
 
 ; A content area that scrolls with the wheel: a child Gui inside a host Gui,
-; moved up and down, with a thin thumb on the right. The popup is one; the
-; dictionary pane is another. Build() lays the new content out off-screen and
-; returns its height, so the caller can size the host first; Show() swaps it in
-; and keeps the scroll position, so picking a definition does not jump back
-; to the top.
+; moved up and down, with a thin thumb on the right. Each popup is one, the
+; dictionary pane is another, and so is the settings window. Build() lays the
+; new content out off-screen and returns its height, so the caller can size
+; the host first; Show() swaps it in and keeps the scroll position, so picking
+; a definition does not jump back to the top.
 class ScrollPane {
-    __New(host) {
+    static byHost := Map()          ; host window -> its pane, for the wheel
+
+    __New(host, bg := "") {
         this.host := host, this.content := "", this.next := "", this.nextH := 0
         this.scroll := 0, this.contentH := 0, this.w := 0, this.h := 0
+        this.bg := (bg != "") ? bg : CCard
         this.bar := host.Add("Text", "x0 y0 w3 h10 Hidden Background" CDim)
+        ScrollPane.byHost[host.Hwnd] := this
+    }
+
+    ; The pane under the mouse, if any: the window there, or the nearest of its
+    ; parents that hosts a pane. Whatever is on top is what the wheel scrolls -
+    ; a pinned popup over the word list, the live popup over a pinned one.
+    static At(mx, my) {
+        h := DllCall("WindowFromPoint", "int64", (my << 32) | (mx & 0xFFFFFFFF), "ptr")
+        while h {
+            if ScrollPane.byHost.Has(h)
+                return ScrollPane.byHost[h]
+            h := DllCall("GetAncestor", "ptr", h, "uint", 1, "ptr")      ; GA_PARENT
+        }
+        return ""
+    }
+
+    ; for a host that is about to go for good
+    Forget() {
+        if ScrollPane.byHost.Has(this.host.Hwnd)
+            ScrollPane.byHost.Delete(this.host.Hwnd)
     }
 
     ; draw(g, width) lays out the content and returns its height
@@ -102,7 +125,7 @@ class ScrollPane {
         if this.next
             DropGui(this.next)
         c := Gui("+Parent" this.host.Hwnd " -Caption -DPIScale")
-        c.BackColor := CCard
+        c.BackColor := this.bg
         c.MarginX := 0, c.MarginY := 0
         this.next := c, this.w := w
         return this.nextH := draw.Call(c, w - 8)
@@ -149,14 +172,18 @@ class ScrollPane {
         this.content := "", this.scroll := 0, this.contentH := 0
         this.bar.Visible := false
     }
+}
 
-    Over(mx, my) {
-        if !this.content
-            return false
-        try WinGetPos(&x, &y, &w, &h, this.host.Hwnd)
-        catch
-            return false
-        return (mx >= x && mx < x + w && my >= y && my < y + h)
+; WM_MOUSEWHEEL: the wheel scrolls whichever pane is under the pointer, and
+; otherwise leaves the message alone - the word list scrolls itself
+PaneWheel(wParam, lParam, msg, hwnd) {
+    MouseGetPos(&mx, &my)
+    delta := (wParam >> 16) & 0xFFFF
+    if (delta > 0x7FFF)
+        delta -= 0x10000
+    if (sp := ScrollPane.At(mx, my)) {
+        sp.ScrollBy(Round(-delta / 120 * 60))
+        return 0
     }
 }
 
@@ -194,10 +221,6 @@ OnSetCursor(wParam, lParam, msg, hwnd) {
     }
 }
 
-; The word, a speaker to hear it, the phonetic, and the actions on the right.
-; Actions are laid out right to left, so the first in the list is the rightmost
-; and each one carries its own width - "delete" needs far less room than
-; "click again to delete".
 ; The links at the top right of a card, laid out right to left - the first in
 ; the list is the rightmost - each with its own width. An empty entry is
 ; skipped, so a card can leave one out with "". A glyph (the pin) names its
@@ -215,13 +238,16 @@ CardLinks(g, x, y, acts) {
     return x
 }
 
-Header(f, word, phon, actions, speakWord := "") {
+; The word, the phonetic, and the actions on the right (see CardLinks) - each
+; action with its own width: "delete" needs far less room than "click again to
+; delete".
+Header(f, word, phon, actions) {
     g := f.g
     right := 0
     for a in actions
         if a
             right += a.w + 8
-    room := f.w - right - 30                        ; 30: the speaker beside it
+    room := f.w - right - 8
     ; Decided by the width the word really takes, not its letter count: two
     ; words of 22 letters overran "look up again" at full size. Too wide, and
     ; it is drawn again smaller and wrapping, the wide copy hidden.
@@ -235,13 +261,6 @@ Header(f, word, phon, actions, speakWord := "") {
         wt.GetPos(&wx, &wy, &ww, &wh)
     }
     bottom := wy + wh, x := wx + ww + 8
-    if (SpeakOn && speakWord != "") {
-        g.SetFont("s11 Norm c" CMuted, "Segoe MDL2 Assets")     ; the speaker glyph
-        sp := Link(g.Add("Text", "x" x " y" (wy + wh - 24) " w20 BackgroundTrans +0x80", Chr(0xE767))
-            , (*) => Speak.Say(speakWord))
-        sp.GetPos(, , &spw)
-        x += spw + 4
-    }
     if (phon != "") {
         g.SetFont("s9 Norm c" CMuted, FontUI)
         pt := g.Add("Text", "x" x " y" (wy + wh - 20) " BackgroundTrans +0x80", phon)
@@ -288,7 +307,7 @@ RenderLookup(g, W, st, owner) {
     acts := [PinAction(owner), {text: action, color: (saved || st.flash != "") ? CMuted : CGreen, w: 84, fn: (*) => owner.Save()}]
     if lk        ; a source that answered with nothing is worth another try
         acts.Push({text: "look up again", color: CBlue, w: 94, fn: (*) => owner.Again()})
-    Header(f, st.word, (lk && lk.def.data) ? Dig(lk.def.data, "phonetic") : "", acts, st.word)
+    Header(f, st.word, (lk && lk.def.data) ? Dig(lk.def.data, "phonetic") : "", acts)
 
     lemma := ""
     if (lk && lk.ai.data && lk.ai.data["lemma"] != "")
@@ -397,7 +416,7 @@ RenderEntry(g, W, st) {
     armed := (A_TickCount - Dict.delArmed < 3000)
     Header(f, rec["word"], Dig(rec, "phonetic")
         , [{text: armed ? "click again to delete" : "delete", color: armed ? CRed : CDim
-          , w: armed ? 130 : 50, fn: (*) => Dict.Delete()}], rec["word"])
+          , w: armed ? 130 : 50, fn: (*) => Dict.Delete()}])
     sub := []
     if (Dig(rec, "kind") = "sentence")          ; stored as "sentence"; the card it came from says TRANSLATE
         sub.Push("translate")

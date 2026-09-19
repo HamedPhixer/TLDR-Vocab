@@ -45,7 +45,7 @@ class Keys {
     ; id is the line's name in Vocab.ini [Keys]; short is for the tray tip
     static List := [
         {id: "Word",      name: "Look up a word",          short: "word",      def: "#LButton",  fn: LookupUnderMouse},
-        {id: "Translate", name: "Translate a sentence",    short: "translate", def: "+#LButton", fn: LookupSentenceUnderMouse},
+        {id: "Translate", name: "Translate a passage",     short: "translate", def: "+#LButton", fn: LookupSentenceUnderMouse},
         {id: "Summary",   name: "Summarise a block",       short: "summary",   def: "^#LButton", fn: LookupParagraphUnderMouse},
         {id: "Selection", name: "Look up selected text",   short: "selection", def: "#vkC0",     fn: LookupSelection},
         {id: "Box",       name: "Draw a box to read",      short: "box",       def: "+#vkC0",    fn: LookupBox},

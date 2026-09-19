@@ -6,9 +6,7 @@
 ; Borderless but resizable: the window keeps WS_THICKFRAME so Windows still
 ; knows how to resize it, WM_NCCALCSIZE hands the frame's pixels back to the
 ; client area so nothing is drawn, and WM_NCHITTEST says which edge the
-; pointer is on. The same hit test is what "lock" switches off - a locked
-; window reports plain client area everywhere, so there is nothing to drag
-; and no edge to pull.
+; pointer is on.
 ;
 ; The one thing that frame still did on its own was paint itself: on losing
 ; focus Windows redraws the inactive frame, and with no frame area left it
@@ -17,8 +15,8 @@
 ; repaint".
 class Dict {
     static g := "", lv := "", search := "", view := "", pane := "", grip := ""
-    static title := "", count := "", lockBtn := "", minBtn := "", closeBtn := ""
-    static countX := 0, locked := 0, split := 0.5, gapY := 0, st := "", delArmed := 0
+    static title := "", count := "", setBtn := "", minBtn := "", closeBtn := ""
+    static countX := 0, split := 0.5, gapY := 0, st := "", delArmed := 0
     static paneRect := "", renderedW := 0, filterer := "", renderer := ""
 
     static Top := 80, Pad := 18, Gap := 10
@@ -40,8 +38,8 @@ class Dict {
         this.countX := 18 + tw + 10
         g.SetFont("s9 Norm c" CMuted, FontUI)
         this.count := g.Add("Text", "x" this.countX " y16 w120 BackgroundTrans +0x80", "")
-        g.SetFont("s9 Norm c" CDim, FontUI)
-        this.lockBtn := Link(g.Add("Text", "x260 y15 w52 Right BackgroundTrans +0x80", "lock"), (*) => Dict.ToggleLock())
+        g.SetFont("s11 Norm c" CMuted, "Segoe MDL2 Assets")                  ; the gear glyph
+        this.setBtn := Link(g.Add("Text", "x294 y10 w22 Center BackgroundTrans +0x80", Chr(0xE713)), (*) => Settings.Show())
         g.SetFont("s13 Norm c" CMuted, FontUI)
         this.minBtn := Link(g.Add("Text", "x320 y6 w22 Center BackgroundTrans +0x80", Chr(0x2013)), (*) => WinMinimize(Dict.g.Hwnd))
         this.closeBtn := Link(g.Add("Text", "x346 y7 w22 Center BackgroundTrans +0x80", Chr(0xD7)), (*) => Dict.Hide())
@@ -72,8 +70,6 @@ class Dict {
         g.OnEvent("Size", ObjBindMethod(Dict, "OnSize"))
         g.OnEvent("Escape", ObjBindMethod(Dict, "OnEscape"))
         g.OnEvent("Close", (*) => Dict.Hide())
-        this.locked := Integer(IniRead(VocabIni(), "Window", "Locked", 0))
-        this.SetLock()
         ; make Windows re-ask WM_NCCALCSIZE now that the handler can answer
         DllCall("SetWindowPos", "ptr", g.Hwnd, "ptr", 0, "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x37)
         DwmAttr(g.Hwnd, 33, 2)
@@ -146,8 +142,8 @@ class Dict {
         x := w - P - 20
         this.closeBtn.Move(x, 7)
         this.minBtn.Move(x - 26, 6)
-        this.lockBtn.Move(x - 26 - 58, 15)
-        this.count.Move(this.countX, 16, Max(0, x - 26 - 58 - this.countX - 6))
+        this.setBtn.Move(x - 52, 10)
+        this.count.Move(this.countX, 16, Max(0, x - 52 - this.countX - 6))
         this.search.Move(P, 46, w - 2 * P, 24)
         avail := h - top - P - this.Gap
         lvH := Max(60, Min(Round(avail * this.split), avail - 140))
@@ -163,7 +159,7 @@ class Dict {
         this.pane.Show(paneH)
         ; A resize here keeps the window's old pixels (that is what answering
         ; WM_NCCALCSIZE with 0 means), and a transparent Text that moves does
-        ; not wipe the spot it left - so "lock", the dash and the cross left
+        ; not wipe the spot it left - so the gear, the dash and the cross left
         ; ghosts of themselves. The header strip is repainted from scratch.
         rc := Buffer(16)
         NumPut("int", 0, "int", 0, "int", w, "int", 42, rc)
@@ -172,7 +168,7 @@ class Dict {
 
     ; the gap between the list and the pane, in window coordinates
     static OverDivider() {
-        if (this.locked || !this.paneRect)
+        if !this.paneRect
             return false
         MouseGetPos(&mx, &my)
         WinGetPos(&wx, &wy, &ww, , this.g.Hwnd)
@@ -207,17 +203,6 @@ class Dict {
             this.Refresh()
         } else
             this.Hide()
-    }
-
-    static ToggleLock() {
-        this.locked := !this.locked
-        IniWrite(this.locked, VocabIni(), "Window", "Locked")
-        this.SetLock()
-    }
-
-    static SetLock() {
-        this.lockBtn.SetFont("c" (this.locked ? CText : CDim))
-        this.lockBtn.Value := this.locked ? "locked" : "lock"
     }
 
     ; The list, newest first, filtered by the search box. keep: a word whose
@@ -427,8 +412,6 @@ DictNcActivate(wParam, lParam, msg, hwnd) {
 DictHitTest(wParam, lParam, msg, hwnd) {
     if (!Dict.g || hwnd != Dict.g.Hwnd)
         return
-    if Dict.locked
-        return 1                                ; HTCLIENT: nothing to drag, no edge to pull
     x := lParam << 48 >> 48, y := lParam << 32 >> 48
     WinGetPos(&wx, &wy, &ww, &wh, hwnd)
     bw := 7
@@ -457,23 +440,6 @@ DictMouseDown(wParam, lParam, msg, hwnd) {
         Dict.DragSplit()
         return 0
     }
-}
-
-; The wheel scrolls whichever pane the pointer is over - the popups first, the
-; live one then the pinned ones, as they sit on top - and otherwise leaves the
-; message to the list
-PaneWheel(wParam, lParam, msg, hwnd) {
-    MouseGetPos(&mx, &my)
-    delta := (wParam >> 16) & 0xFFFF
-    if (delta > 0x7FFF)
-        delta -= 0x10000
-    panes := PopupCard.Panes()
-    panes.Push(Dict.pane)
-    for sp in panes
-        if (sp && sp.Over(mx, my)) {
-            sp.ScrollBy(Round(-delta / 120 * 60))
-            return 0
-        }
 }
 
 DictMoved(wParam, lParam, msg, hwnd) {

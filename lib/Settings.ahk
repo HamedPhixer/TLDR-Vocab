@@ -1,15 +1,17 @@
 ;================================================================================
 ; Settings.ahk - the settings window
 ;================================================================================
-; Tray menu > Settings. Six sections, all kept in Vocab.ini and all working
+; Tray menu > Settings, or the gear in the word list. A window that scrolls,
+; and can be made shorter or taller. Six sections, all kept in Vocab.ini and all working
 ; the moment they change - there is no Save button - except administrator,
 ; which can only take effect at the next start:
-;   TRANSLATION  the language translations go into (Language.ahk)
+;   TRANSLATION  the language translations go into (Language.ahk), and how
+;             much Translate takes (TranslateScope, in Sentence.ahk)
 ;   GEMINI    the key (hidden unless "show" is clicked), a "test" that asks
 ;             Google whether the key is good, the link to get a free one, and
 ;             the model (empty = automatic)
 ;   NETWORK   the proxy - see Http.Proxy in Lookup.ahk
-;   SOUND     the speaker buttons, and saying each word as it is looked up
+;   SOUND     saying each word out loud as it is looked up
 ;   GENERAL   start as administrator - see the top of Vocab.ahk - and a
 ;             link to the README's "Start with Windows"
 ;   KEYS      the key rows from Keys.ahk
@@ -23,10 +25,9 @@
 ;================================================================================
 #Requires AutoHotkey v2.0
 
-; the [Sound] section, read once at start; the window writes both at once
+; the [Sound] section, read once at start; the window writes it
 LoadSoundSettings() {
-    global SpeakOn, SpeakAuto
-    try SpeakOn := Integer(IniRead(VocabIni(), "Sound", "Speaker", SpeakOn))
+    global SpeakAuto
     try SpeakAuto := Integer(IniRead(VocabIni(), "Sound", "SayOnLookup", SpeakAuto))
 }
 
@@ -60,9 +61,12 @@ NoKeyLine(f, lk) {
 KeyTrouble(lk) => (lk && (!lk.ai.enabled || InStr(lk.ai.note, "key rejected")))
 
 class Settings {
-    static g := "", key := "", showLink := "", model := "", proxy := "", noteBox := ""
-    static speak := "", auto := "", admin := "", lang := "", saver := "", tester := "", req := "", shown := false
+    static g := "", pane := "", key := "", showLink := "", model := "", proxy := "", noteBox := ""
+    static auto := "", admin := "", lang := "", scope := "", saver := "", tester := "", req := "", shown := false
+    static W := 608                 ; the content is laid out 600 wide, plus the scroll thumb
 
+    ; Opens where it was left, as tall as it was left - or as tall as its
+    ; content, whichever is less, and never taller than the screen
     static Show(section := "") {
         if !this.g
             this.Build()
@@ -70,8 +74,12 @@ class Settings {
         KeysWin.Refresh()
         if DllCall("IsWindowVisible", "ptr", this.g.Hwnd)
             WinActivate(this.g.Hwnd)
-        else
-            this.g.Show("AutoSize")
+        else {
+            wa := WorkAreaAt(0, 0)
+            h := Integer(IniRead(VocabIni(), "Window", "SettingsH", 0))
+            h := Min((h >= 200) ? h : this.pane.contentH, this.pane.contentH, wa[4] - wa[2] - 60)
+            this.g.Show("w" this.W " h" h)
+        }
         if (section = "gemini") {
             this.key.Focus()
             if (Trim(this.key.Value) = "")
@@ -79,107 +87,127 @@ class Settings {
         }
     }
 
+    ; The window is a frame that can be made shorter or taller - not wider -
+    ; around one pane that scrolls with the wheel (ScrollPane, in Cards.ahk).
+    ; Everything in it is laid out once, in Fill.
     static Build() {
-        g := Gui("-MinimizeBox -MaximizeBox -DPIScale", AppName " settings")
+        g := Gui("+Resize -MaximizeBox -MinimizeBox -DPIScale +MinSize" this.W "x200", AppName " settings")
         g.BackColor := CBg
-        g.MarginX := 22, g.MarginY := 16
+        g.MarginX := 0, g.MarginY := 0
         this.g := g
         this.saver := ObjBindMethod(Settings, "Save")
         this.tester := ObjBindMethod(Settings, "TestPoll")
-
-        g.SetFont("s12 Bold c" CText, FontUI)
-        g.Add("Text", "x22 y14 BackgroundTrans +0x80", "Settings")
-        g.SetFont("s9 Norm c" CMuted, FontUI)
-        g.Add("Text", "x22 y42 w556 BackgroundTrans +0x80", "Saved as you change them, and used straight away.")
-        g.SetFont("s9 Norm c" CDim, FontUI)
-        g.Add("Text", "x478 y20 w100 Right BackgroundTrans +0x80", AppName " " VocabVersion)
-
-        ; TRANSLATION
-        y := this.Head(g, 72, "TRANSLATION")
-        this.Label(g, y, "Into")
-        names := []
-        for l in Lang.List
-            names.Push(l.name)
-        g.SetFont("s10 Norm c" CText, FontUI)
-        this.lang := g.Add("DropDownList", "x100 y" y " w200 r12", names)
-        DarkList(this.lang, "DarkMode_CFD")
-        this.lang.OnEvent("Change", (*) => Settings.PickLanguage())
-        g.SetFont("s8 Norm c" CDim, FontUI)
-        g.Add("Text", "x314 y" (y + 1) " w264 BackgroundTrans +0x80"
-            , "What you read is always English. Words you saved keep the language they were saved in.")
-        y += 42
-
-        ; GEMINI
-        y := this.Head(g, y + 6, "GEMINI")
-        g.SetFont("s9 Norm c" CMuted, FontUI)
-        g.Add("Text", "x22 y" y " w556 BackgroundTrans +0x80"
-            , "Explains sentences in plain English, writes the summaries, and picks the meaning of a word "
-            . "that fits where you found it. Without a key, the dictionary, the translation and the "
-            . "pronunciation all still work.")
-        y += 50
-        this.Label(g, y, "Key")
-        this.key := this.Edit(g, y, 330, "Password")
-        this.key.OnEvent("Change", (*) => SetTimer(Settings.saver, -500))
-        g.SetFont("s9 Norm c" CBlue, FontUI)
-        this.showLink := Link(g.Add("Text", "x444 y" (y + 4) " w40 BackgroundTrans +0x80", "show")
-            , (*) => Settings.ToggleShow())
-        Link(g.Add("Text", "x490 y" (y + 4) " w40 BackgroundTrans +0x80", "test"), (*) => Settings.Test())
-        y += 32
-        g.SetFont("s9 Norm c" CBlue, FontUI)
-        Link(g.Add("Text", "x100 y" y " BackgroundTrans +0x80", "get a free key"), (*) => Run(GeminiKeyUrl()))
-        g.SetFont("s9 Norm c" CDim, FontUI)
-        g.Add("Text", "x192 y" y " w386 BackgroundTrans +0x80"
-            , "sign in with Google, press Create API key, copy it, paste it above")
-        y += 22
-        g.SetFont("s9 Norm c" CMuted, FontUI)
-        this.noteBox := g.Add("Text", "x100 y" y " w478 h34 BackgroundTrans +0x80", "")
-        y += 38
-        this.Label(g, y, "Model")
-        this.model := this.Edit(g, y, 478)
-        SendMessage(0x1501, 1, StrPtr("automatic - newest free Flash, the next when its quota runs out"), this.model)
-        this.model.OnEvent("Change", (*) => SetTimer(Settings.saver, -500))
-        y += 36
-
-        ; NETWORK
-        y := this.Head(g, y + 6, "NETWORK")
-        this.Label(g, y, "Proxy")
-        this.proxy := this.Edit(g, y, 170)
-        SendMessage(0x1501, 1, StrPtr("auto"), this.proxy)
-        this.proxy.OnEvent("Change", (*) => SetTimer(Settings.saver, -500))
-        g.SetFont("s8 Norm c" CDim, FontUI)
-        g.Add("Text", "x284 y" (y - 2) " w294 BackgroundTrans +0x80"
-            , "auto follows Windows (a VPN app's " Chr(0x201C) "system proxy" Chr(0x201D) "), none goes direct, "
-            . "or an address like 127.0.0.1:10809")
-        y += 40
-
-        ; SOUND
-        y := this.Head(g, y + 6, "SOUND")
-        this.speak := this.Check(g, y, "Speaker button beside each word")
-        y += 28
-        this.auto := this.Check(g, y, "Say each word out loud as it is looked up")
-        y += 34
-
-        ; GENERAL
-        y := this.Head(g, y + 6, "GENERAL")
-        this.admin := this.Check(g, y, "Start as administrator")
-        g.SetFont("s8 Norm c" CDim, FontUI)
-        g.Add("Text", "x44 y" (y + 22) " w534 BackgroundTrans +0x80"
-            , "Only needed for the selection key in programs that themselves run as administrator. "
-            . "Windows asks each time " AppName " starts. Takes effect from the next start.")
-        y += 58
-        g.SetFont("s9 Norm c" CBlue, FontUI)
-        Link(g.Add("Text", "x22 y" y " BackgroundTrans +0x80", "Start " AppName " with Windows - how")
-            , (*) => Run(RepoUrl "#start-with-windows"))
-        y += 30
-
-        ; KEYS
-        y := this.Head(g, y + 6, "KEYS")
-        y := KeysWin.AddTo(g, y)
-
+        this.pane := ScrollPane(g, CBg)
+        h := this.pane.Build(this.W, (c, W) => Settings.Fill(c))
+        g.Opt("+MaxSize" this.W "x" h)
+        this.pane.Show(h)
+        g.OnEvent("Size", (g, minMax, w, h) => Settings.pane.Show(h))
         g.OnEvent("Close", (*) => Settings.Close())
         g.OnEvent("Escape", (*) => Settings.Close())
         DwmAttr(g.Hwnd, 20, 1)                  ; dark title bar
         SetWindowIcon(g.Hwnd)
+    }
+
+    ; every section, top to bottom, into the pane's content c; returns its height
+    static Fill(c) {
+        c.OnEvent("Escape", (*) => Settings.Close())    ; Esc while a box in it has the focus
+        c.SetFont("s12 Bold c" CText, FontUI)
+        c.Add("Text", "x22 y14 BackgroundTrans +0x80", "Settings")
+        c.SetFont("s9 Norm c" CMuted, FontUI)
+        c.Add("Text", "x22 y42 w556 BackgroundTrans +0x80", "Saved as you change them, and used straight away.")
+        c.SetFont("s9 Norm c" CDim, FontUI)
+        c.Add("Text", "x478 y20 w100 Right BackgroundTrans +0x80", AppName " " VocabVersion)
+
+        ; TRANSLATION
+        y := this.Head(c, 72, "TRANSLATION")
+        this.Label(c, y, "Into")
+        names := []
+        for l in Lang.List
+            names.Push(l.name)
+        c.SetFont("s10 Norm c" CText, FontUI)
+        this.lang := c.Add("DropDownList", "x100 y" y " w200 r12", names)
+        DarkList(this.lang, "DarkMode_CFD")
+        this.lang.OnEvent("Change", (*) => Settings.PickLanguage())
+        c.SetFont("s8 Norm c" CDim, FontUI)
+        c.Add("Text", "x314 y" (y + 1) " w264 BackgroundTrans +0x80"
+            , "What you read is always English. Words you saved keep the language they were saved in.")
+        y += 42
+        this.Label(c, y, "Passage")
+        c.SetFont("s10 Norm c" CText, FontUI)
+        this.scope := c.Add("DropDownList", "x100 y" y " w200", ["up to ten sentences", "only the one sentence"])
+        DarkList(this.scope, "DarkMode_CFD")
+        this.scope.OnEvent("Change", (*) => Settings.Save())
+        c.SetFont("s8 Norm c" CDim, FontUI)
+        c.Add("Text", "x314 y" (y + 1) " w264 BackgroundTrans +0x80"
+            , "What Translate takes: the sentences around the one you click, or just that one, "
+            . "up to its first stop.")
+        y += 42
+
+        ; GEMINI
+        y := this.Head(c, y + 6, "GEMINI")
+        c.SetFont("s9 Norm c" CMuted, FontUI)
+        c.Add("Text", "x22 y" y " w556 BackgroundTrans +0x80"
+            , "Explains sentences in plain English, writes the summaries, and picks the meaning of a word "
+            . "that fits where you found it. Without a key, the dictionary, the translation and the "
+            . "pronunciation all still work.")
+        y += 50
+        this.Label(c, y, "Key")
+        this.key := this.Edit(c, y, 330, "Password")
+        this.key.OnEvent("Change", (*) => SetTimer(Settings.saver, -500))
+        c.SetFont("s9 Norm c" CBlue, FontUI)
+        this.showLink := Link(c.Add("Text", "x444 y" (y + 4) " w40 BackgroundTrans +0x80", "show")
+            , (*) => Settings.ToggleShow())
+        Link(c.Add("Text", "x490 y" (y + 4) " w40 BackgroundTrans +0x80", "test"), (*) => Settings.Test())
+        y += 32
+        c.SetFont("s9 Norm c" CBlue, FontUI)
+        Link(c.Add("Text", "x100 y" y " BackgroundTrans +0x80", "get a free key"), (*) => Run(GeminiKeyUrl()))
+        c.SetFont("s9 Norm c" CDim, FontUI)
+        c.Add("Text", "x192 y" y " w386 BackgroundTrans +0x80"
+            , "sign in with Google, press Create API key, copy it, paste it above")
+        y += 22
+        c.SetFont("s9 Norm c" CMuted, FontUI)
+        this.noteBox := c.Add("Text", "x100 y" y " w478 h34 BackgroundTrans +0x80", "")
+        y += 38
+        this.Label(c, y, "Model")
+        this.model := this.Edit(c, y, 478)
+        SendMessage(0x1501, 1, StrPtr("automatic - newest free Flash, the next when its quota runs out"), this.model)
+        this.model.OnEvent("Change", (*) => SetTimer(Settings.saver, -500))
+        y += 36
+
+        ; NETWORK - WinHTTP, which every request goes through, speaks to HTTP
+        ; proxies only: a VPN app's HTTP port works, its SOCKS port does not
+        y := this.Head(c, y + 6, "NETWORK")
+        this.Label(c, y, "Proxy")
+        this.proxy := this.Edit(c, y, 170)
+        SendMessage(0x1501, 1, StrPtr("auto"), this.proxy)
+        this.proxy.OnEvent("Change", (*) => SetTimer(Settings.saver, -500))
+        c.SetFont("s8 Norm c" CDim, FontUI)
+        c.Add("Text", "x284 y" (y - 4) " w294 BackgroundTrans +0x80"
+            , "auto follows Windows (a VPN app's " Chr(0x201C) "system proxy" Chr(0x201D) "), none goes direct, "
+            . "or an HTTP proxy like 127.0.0.1:10809. SOCKS proxies do not work.")
+        y += 44
+
+        ; SOUND
+        y := this.Head(c, y + 6, "SOUND")
+        this.auto := this.Check(c, y, "Say each word out loud as it is looked up")
+        y += 34
+
+        ; GENERAL
+        y := this.Head(c, y + 6, "GENERAL")
+        this.admin := this.Check(c, y, "Start as administrator")
+        c.SetFont("s8 Norm c" CDim, FontUI)
+        c.Add("Text", "x44 y" (y + 22) " w534 BackgroundTrans +0x80"
+            , "Only needed for the selection key in programs that themselves run as administrator. "
+            . "Windows asks each time " AppName " starts. Takes effect from the next start.")
+        y += 58
+        c.SetFont("s9 Norm c" CBlue, FontUI)
+        Link(c.Add("Text", "x22 y" y " BackgroundTrans +0x80", "Start " AppName " with Windows - how")
+            , (*) => Run(RepoUrl "#start-with-windows"))
+        y += 30
+
+        ; KEYS
+        y := this.Head(c, y + 6, "KEYS")
+        return KeysWin.AddTo(c, y) + 8
     }
 
     static Head(g, y, title) {
@@ -217,17 +245,17 @@ class Settings {
         this.model.Value := Trim(IniRead(ini, "Gemini", "Model", ""))
         px := Trim(IniRead(ini, "Network", "Proxy", "auto"))
         this.proxy.Value := (px = "auto") ? "" : px
-        this.speak.Value := SpeakOn ? 1 : 0
         this.auto.Value := SpeakAuto ? 1 : 0
         this.admin.Value := (IniRead(ini, "General", "RunAsAdmin", 0) = 1) ? 1 : 0
         for i, l in Lang.List
             if (l.code = Lang.Code())
                 this.lang.Value := i
+        this.scope.Value := (TranslateScope() = 1) ? 2 : 1
         this.Note("")
     }
 
     static Save(*) {
-        global SpeakOn, SpeakAuto
+        global SpeakAuto
         if !this.g
             return
         ini := VocabIni()
@@ -236,10 +264,10 @@ class Settings {
             IniWrite(Trim(this.model.Value), ini, "Gemini", "Model")
             px := Trim(this.proxy.Value)
             IniWrite((px = "") ? "auto" : px, ini, "Network", "Proxy")
-            SpeakOn := this.speak.Value, SpeakAuto := this.auto.Value
-            IniWrite(SpeakOn, ini, "Sound", "Speaker")
+            SpeakAuto := this.auto.Value
             IniWrite(SpeakAuto, ini, "Sound", "SayOnLookup")
             IniWrite(this.admin.Value, ini, "General", "RunAsAdmin")
+            IniWrite((this.scope.Value = 2) ? 1 : 10, ini, "Translation", "Sentences")
         } catch as e
             this.Note("Could not write Vocab.ini: " e.Message, CRed)
     }
@@ -248,6 +276,8 @@ class Settings {
         SetTimer(this.saver, 0)
         this.Save()                             ; a change typed a moment ago
         KeysWin.Stop()
+        WinGetClientPos(, , , &h, this.g.Hwnd)  ; the height it was left at, for next time
+        try IniWrite(h, VocabIni(), "Window", "SettingsH")
         this.g.Hide()
     }
 
@@ -257,6 +287,7 @@ class Settings {
         Lang.Set(Lang.List[this.lang.Value].code)
         Dict.Refresh()
     }
+
     static Note(msg, color := "") {
         this.noteBox.SetFont("c" (color != "" ? color : CMuted))
         this.noteBox.Text := msg

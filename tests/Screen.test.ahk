@@ -93,4 +93,22 @@ CheckTrue("pin: a click away closes only the live card", !Popup.visible && first
 first.Close()
 CheckTrue("pin: its x closes it for good", !PopupCard.pinned.Length && !first.g)
 
+; Settings: a window that scrolls, and can be made shorter
+for a in Keys.List                      ; the key rows need keys; the defaults, not registered
+    Keys.cur[a.id] := a.def
+Settings.Show()
+WinMove(40, 40, , , Settings.g.Hwnd)
+WinGetClientPos(, , , &ch, Settings.g.Hwnd)
+full := Settings.pane.contentH
+Settings.g.Move(, , , 400)
+Sleep 200
+CheckTrue("settings: can be made shorter than its content", Settings.pane.h < full && Settings.pane.h < ch, Settings.pane.h " of " full)
+WinGetPos(&sx, &sy, &sw, &sh, Settings.g.Hwnd)
+CheckTrue("settings: the wheel finds its pane", ScrollPane.At(sx + sw // 2, sy + sh // 2) == Settings.pane)
+Settings.pane.ScrollBy(200)
+CheckTrue("settings: it scrolls", Settings.pane.scroll = 200, Settings.pane.scroll)
+Settings.pane.ScrollBy(100000)
+CheckTrue("settings: not past the end", Settings.pane.scroll = full - Settings.pane.h)
+Settings.Close()
+
 Done()

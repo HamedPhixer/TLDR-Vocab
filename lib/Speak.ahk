@@ -1,11 +1,12 @@
 ;================================================================================
 ; Speak.ahk - hear the word
 ;================================================================================
-; Speak.Say("word") and that is all. What it does, in order:
+; Speak.Say("word") and that is all - called for each word looked up when
+; Settings > SOUND "Say each word out loud" is on. What it does, in order:
 ;
 ;   1. cache\audio-us\<word>.mp3 a word heard once is instant and works offline
 ;   2. Google's speech endpoint  free, no key, the same family of addresses the
-;                                Persian translation already uses. A small mp3,
+;                                translation already uses. A small mp3,
 ;                                kept in the cache for next time. American:
 ;                                plain "en" gets the British voice.
 ;   3. the Windows voice         SAPI, offline, always there. Flatter than a
@@ -15,7 +16,7 @@
 ;
 ; ENGLISH ONLY. The same endpoint refuses Persian (every form of the request
 ; returns "malformed"), and Windows has no Persian voice unless one is
-; installed, so there is no Persian speaker button rather than one that fails.
+; installed, so translations are never spoken.
 ;
 ; Nothing blocks: the download is asynchronous like every other request here,
 ; and playback goes through MCI, which returns as soon as the sound starts.
@@ -29,7 +30,7 @@ class Speak {
 
     static Say(text) {
         text := Trim(text)
-        if (text = "" || !SpeakOn)
+        if (text = "")
             return
         path := Speak.File(text)
         if FileExist(path) {

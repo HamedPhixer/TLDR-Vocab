@@ -104,6 +104,14 @@ at `:` or `;` left Gemini half a sentence of context.
 - **Pinning is one way:** a pinned card closes, it does not unpin. Unpinning would need to decide what
   happens to the live card already showing.
 
+## Removed on purpose
+
+- **The speaker button beside each word** (and its setting). It was rarely clicked and took room in
+  every card header. Saying each word out loud as it is looked up stays: that is a setting, not a
+  button, and uses the same voice code.
+- **The word list's "lock"**, which switched off dragging and resizing. The gear to Settings took its
+  place.
+
 ## Keys
 
 - **A custom recorder,** because AutoHotkey's Hotkey control cannot record the
