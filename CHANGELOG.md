@@ -2,6 +2,18 @@
 
 Each version's notes. The release on GitHub is built from the section with its number.
 
+## 1.2.0-beta.2 — 2026-09-20
+
+Fixes from a last review of the one-click update. From 1.2.0-beta.1, **Update now** brings you here.
+
+### Fixed
+
+- "Not now" while the update was unpacking or checking the new version did not stop it.
+- If the update helper itself ever ran into an error, TLDR Vocab stayed closed with no message. It now
+  starts again and says what happened.
+- The update could not start with AutoHotkey's "UI Access" edition.
+- Network errors showed double brackets: "Could not reach GitHub ((0x80072EFD))".
+
 ## 1.2.0-beta.1 — 2026-09-19
 
 A test version of 1.2.0.
@@ -56,7 +68,7 @@ A test version of 1.1.0.
 
 ### Changed
 
-- The version number, the release notes and pre-releases: see "Releasing" in the README.
+- Version numbers, release notes from this file, and test versions published as pre-releases.
 
 ## 1.0.0 — 2026-09-19
 

@@ -239,6 +239,9 @@ Check("swap: a list naming the user's words is refused whole", Swap.Apply(app, n
 Check("swap: ...before anything changed", read(app "\Vocab.ahk") "," read(app "\words.json"), "old main,my words")
 try DirDelete(tmp, true)
 
+Check("network error: no double brackets", Http.Short("(0x80072EFD)"), "0x80072EFD")
+Check("network error: the text kept", Http.Short("0x80072EE2 - The operation timed out`r`n"), "The operation timed out")
+
 ;--- small helpers -------------------------------------------------------------
 Check("clean word: quotes and comma", CleanWord(Chr(0x201C) "Hello," Chr(0x201D)), "Hello")
 Check("clean word: possessive", CleanWord("harbour's"), "harbour")

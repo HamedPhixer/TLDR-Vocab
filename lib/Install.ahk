@@ -223,9 +223,14 @@ class Install {
         if (size != want["size"] || hash != want["sha256"] || (digest != "" && StrLower(digest) != hash))
             return Install.Fail("The download is not the file that was published (its check sum differs). Nothing was changed.")
 
+        ; RunWait below lets the window's clicks through: "Not now" there
+        ; clears busy, and the update stops at the next step
         Install.Say("Unpacking" Chr(0x2026))
         out := Install.dir "\new"
-        if !Install.Unzip(zipPath, out)
+        ok := Install.Unzip(zipPath, out)
+        if !Install.busy
+            return
+        if !ok
             return Install.Fail("The download could not be unpacked. Nothing was changed.")
         src := out "\TLDR Vocab"
         files := Install.Files(m, Install.kind)
@@ -238,14 +243,19 @@ class Install {
         Install.Say("Checking that the new version loads" Chr(0x2026))
         ahk := (Install.kind = "portable") ? src "\AutoHotkey64.exe" : A_AhkPath
         code := RunWait('"' ahk '" /Validate /ErrorStdOut "' src '\Vocab.ahk"', src, "Hide")
+        if !Install.busy
+            return
         if (code != 0)
             return Install.Fail("The new version does not load with this AutoHotkey (" A_AhkVersion
                 . ") - it may need a newer one. Nothing was changed.")
 
         Install.Say("Closing and updating" Chr(0x2026))
+        Install.g.Opt("+Disabled")                              ; past the point of "Not now"
         try Install.HandOver(src, files)
-        catch as e
+        catch as e {
+            Install.g.Opt("-Disabled")
             return Install.Fail("Could not start the update (" e.Message "). Nothing was changed.")
+        }
         ExitApp
     }
 
@@ -253,7 +263,12 @@ class Install {
     static HandOver(src, files) {
         help := Install.dir "\helper"
         DirCreate(help)
-        FileCopy(A_AhkPath, help "\AutoHotkey64.exe", 1)
+        ; the UI Access edition only runs from Program Files; its plain twin
+        ; sits beside it
+        exe := A_AhkPath
+        if (InStr(exe, "_UIA") && FileExist(StrReplace(exe, "_UIA")))
+            exe := StrReplace(exe, "_UIA")
+        FileCopy(exe, help "\AutoHotkey64.exe", 1)
         SplitPath(A_LineFile, , &lib)
         FileCopy(lib "\Updater.ahk", help "\Updater.ahk", 1)
         FileCopy(lib "\Swap.ahk", help "\Swap.ahk", 1)

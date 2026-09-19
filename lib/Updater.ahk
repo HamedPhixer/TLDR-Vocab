@@ -25,12 +25,27 @@
 
 global U_Plan := "", U_Log := ""
 
+; TLDR Vocab has already closed when this runs, so no failure may end quietly:
+; whatever goes wrong, it is started again - with the files as they are,
+; which Swap.Apply leaves either all new or all old - and the user is told.
+OnError(U_Crash)
 U_Main()
+
+U_Crash(e, mode) {
+    global U_Plan
+    U_Say("error: " e.Message " (line " e.Line ")")
+    if IsObject(U_Plan)
+        try Run(U_Cmd(U_Plan, ""), U_Plan.app)
+    MsgBox("The update stopped with an error: " e.Message "`n`nYour words and settings were not touched."
+        . (IsObject(U_Plan) ? "`n`n(Details: " U_Log ")" : "`n`nStart TLDR Vocab again from its folder.")
+        , "TLDR Vocab update", "Icon! 0x40000")
+    ExitApp 1
+}
 
 U_Main() {
     global U_Plan, U_Log
     if (A_Args.Length < 1 || !FileExist(A_Args[1]))
-        ExitApp 2
+        throw Error("its plan is missing")
     SplitPath(A_Args[1], , &dir)
     U_Log := dir "\update.log"
     U_Plan := p := U_Read(A_Args[1])
@@ -38,7 +53,6 @@ U_Main() {
 
     wait := U_Window("Updating " p.name " to " p.to Chr(0x2026))
     if (p.pid && ProcessWaitClose(p.pid, 30)) {        ; its PID back = still running
-
         U_Say(p.name " did not close")
         wait.Destroy()
         U_Fail(p, p.name " did not close, so nothing was changed.", false)
@@ -153,7 +167,7 @@ U_Read(path) {
     }
     for need in ["app", "source", "run", "from", "to", "page", "marker"]
         if !p.HasProp(need) || p.%need% = ""
-            ExitApp 3
+            throw Error("its plan has no " need)
     return p
 }
 

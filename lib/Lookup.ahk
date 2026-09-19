@@ -203,8 +203,9 @@ class Http {
     }
 
     static Short(msg) {
-        msg := Trim(StrSplit(msg, "`n")[1])
+        msg := Trim(StrSplit(msg, "`n")[1], " `t`r")
         msg := RegExReplace(msg, "^0x[0-9A-Fa-f]+ - ")
+        msg := RegExReplace(msg, "^\((.*)\)$", "$1")        ; a bare "(0x80072EFD)", so callers' own brackets do not double
         return (StrLen(msg) > 60) ? SubStr(msg, 1, 57) "..." : msg
     }
 }
