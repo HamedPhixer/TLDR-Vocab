@@ -1,19 +1,36 @@
 ;================================================================================
-; Popup.ahk - the lookup popup
+; Popup.ahk - the lookup popup, and the ones pinned to the screen
+;================================================================================
+; A PopupCard is one popup window. The global Popup is always the LIVE one:
+; every lookup goes to it, and a click outside it or Esc closes it. The pin at
+; the top of a card detaches it: it becomes a pinned card that stays until its
+; x is clicked, can be dragged anywhere by any empty part of it, and keeps
+; working on its own - "look up again", the Translate | Summary switch,
+; "+ save". Popup is then a fresh live card, so the next lookup opens beside
+; the pinned one instead of replacing it. Pin as many as you like.
+;
+; Where the live card goes and how tall it may get are decided once, in
+; Plan(), when a lookup starts. Below the word it grows downward from just
+; under the word; above, upward from just over it - and past capH it scrolls
+; instead of growing. "+ N more" freezes the current height, so opening the
+; rest scrolls in place rather than moving the popup somewhere the pointer is
+; not. A pinned card stays exactly where it was put.
 ;================================================================================
 #Requires AutoHotkey v2.0
 
-; Where it goes and how tall it may get are decided once, in Plan(), when a
-; lookup starts. Below the word it grows downward from just under the word;
-; above, upward from just over it - and past capH it scrolls instead of
-; growing. "+ N more" freezes the current height, so opening the rest scrolls
-; in place rather than moving the popup somewhere the pointer is not.
-class Popup {
-    static g := "", pane := "", st := "", anchor := "", visible := false, closer := ""
-    static side := "below", capH := 400, px := 0, w := 0, h := 0
-    static misread := ""            ; what the screen said before Gemini fixed it
+global Popup := PopupCard()
 
-    static Ensure() {
+class PopupCard {
+    static pinned := []             ; the cards pinned to the screen
+
+    __New() {
+        this.g := "", this.pane := "", this.st := "", this.anchor := "", this.visible := false
+        this.closer := "", this.side := "below", this.capH := 400, this.px := 0, this.w := 0, this.h := 0
+        this.wa := "", this.isPinned := false
+        this.misread := ""          ; what the screen said before Gemini fixed it
+    }
+
+    Ensure() {
         if this.g
             return
         g := Gui("+ToolWindow -Caption +AlwaysOnTop +E0x08000000 -DPIScale")    ; NOACTIVATE
@@ -21,44 +38,44 @@ class Popup {
         g.MarginX := 0, g.MarginY := 0
         this.g := g
         this.pane := ScrollPane(g)
-        this.closer := ObjBindMethod(Popup, "Close")
+        this.closer := ObjBindMethod(this, "Close")
     }
 
-    static Begin(word, context, anchor, ocr := false, mode := "word") {
+    Begin(word, context, anchor, ocr := false, mode := "word") {
         this.Stop()
         this.st := {word: word, context: context, lk: "", choice: "", userChose: false
             , expanded: false, flash: "", maxSenses: 40, lockH: 0
-            , ocr: ocr, misread: Popup.misread, fixed: false, mode: mode}
-        Popup.misread := ""
+            , ocr: ocr, misread: this.misread, fixed: false, mode: mode}
+        this.misread := ""
         this.anchor := anchor
         this.Plan((mode = "paragraph") ? PopWide : PopW)
         this.pane.Clear()
         this.Render()
     }
 
-    static Attach(lk) => this.st.lk := lk
+    Attach(lk) => this.st.lk := lk
 
-    static Update(lk) {
+    Update(lk) {
         if (!this.visible || this.st.lk != lk)
             return
         ; The screen reader can hand us a damaged word: "teaching" inside a
         ; player's highlight box comes back as "eachin", because the box's
         ; edges sit on the first and last letter. Gemini reads the sentence and
         ; says what the word was; the lookup then starts again on that word, so
-        ; the definition, the Persian and whatever gets saved are all the right
-        ; word. Only for words read off the screen, and only once.
+        ; the definition, the translation and whatever gets saved are all the
+        ; right word. Only for words read off the screen, and only once.
         fix := Dig(lk.ai.data, "corrected")
         if (this.st.ocr && !this.st.fixed && UsableFix(fix, this.st.word)) {
             this.st.fixed := true
-            Popup.misread := this.st.word
+            this.misread := this.st.word
             sentence := Dig(lk.ai.data, "example")
-            StartLookup(Trim(fix), (sentence != "") ? sentence : this.st.context, Popup, this.anchor)
+            StartLookup(Trim(fix), (sentence != "") ? sentence : this.st.context, this, this.anchor)
             return
         }
         this.Render()
     }
 
-    static Message(text, x, y) {
+    Message(text, x, y) {
         this.Stop()
         this.st := {message: text, lk: "", lockH: 0}
         this.anchor := {x: x, y: y, w: 1, h: 16}
@@ -68,7 +85,7 @@ class Popup {
         SetTimer(this.closer, -1800)
     }
 
-    static Stop() {
+    Stop() {
         this.Ensure()
         SetTimer(this.closer, 0)
         if (this.st && this.st.lk)
@@ -81,7 +98,7 @@ class Popup {
     ; box - over the middle of it. Wherever it goes, it stays on the screen:
     ; with only "below" and "above" to choose from, a block that filled the
     ; screen pushed it off the edge.
-    static Plan(w) {
+    Plan(w) {
         a := this.anchor
         wa := WorkAreaAt(a.x + a.w / 2, a.y + a.h / 2)
         want := Min(PopMaxH, 320)
@@ -102,7 +119,7 @@ class Popup {
         this.px := Max(wa[1], Min(this.px, wa[3] - w))
     }
 
-    static PlaceY(h) {
+    PlaceY(h) {
         a := this.anchor, wa := this.wa
         y := (this.side = "below") ? Round(a.y + a.h) + 8
            : (this.side = "above") ? Round(a.y) - 8 - h
@@ -111,15 +128,18 @@ class Popup {
         return Max(wa[2], Min(y, wa[4] - h))
     }
 
-    static Render() {
+    Render() {
         st := this.st
         if st.HasProp("message")
-            ch := this.pane.Build(this.w, (g, W) => Popup.DrawMessage(g, W))
+            ch := this.pane.Build(this.w, (g, W) => this.DrawMessage(g, W))
         else
-            ch := this.pane.Build(this.w, (g, W) => RenderLookup(g, W, Popup.st, Popup))
+            ch := this.pane.Build(this.w, (g, W) => RenderLookup(g, W, this.st, this))
         h := Min(ch, st.lockH ? st.lockH : this.capH)
-        y := this.PlaceY(h)
-        this.g.Show("NoActivate x" this.px " y" y " w" this.w " h" h)
+        if (this.isPinned && this.visible) {    ; where it was put, only its height changes
+            WinGetPos(&x, &y, , , this.g.Hwnd)
+            this.g.Show("NoActivate x" x " y" y " w" this.w " h" h)
+        } else
+            this.g.Show("NoActivate x" this.px " y" this.PlaceY(h) " w" this.w " h" h)
         this.pane.Show(h)
         if !this.visible {
             DwmAttr(this.g.Hwnd, 33, 2)                 ; rounded corners (Windows 11)
@@ -128,14 +148,14 @@ class Popup {
         this.h := h, this.visible := true
     }
 
-    static DrawMessage(g, W) {
+    DrawMessage(g, W) {
         f := Flow(g, 14, 10, W - 20)
         f.Text(this.st.message, CMuted, "s9 Norm")
         return f.y + 8
     }
 
-    ; A click outside the popup closes it; one inside is its own business
-    static ClickAway() {
+    ; A click outside the live popup closes it; one inside is its own business
+    ClickAway() {
         MouseGetPos(&mx, &my)
         try WinGetPos(&x, &y, &w, &h, this.g.Hwnd)
         catch
@@ -144,46 +164,72 @@ class Popup {
             this.Close()
     }
 
-    static Close(*) {
+    ; The live card hides, ready for the next lookup; a pinned one is done for
+    ; good and goes away completely.
+    Close(*) {
         this.visible := false
         if !this.g
             return
         SetTimer(this.closer, 0)
-        this.g.Hide()
-        this.pane.Clear()
         if (this.st && this.st.lk)
             this.st.lk.Cancel()
+        if this.isPinned {
+            for i, card in PopupCard.pinned
+                if (card == this) {
+                    PopupCard.pinned.RemoveAt(i)
+                    break
+                }
+            this.pane.Clear()
+            DropGui(this.g)
+            this.g := ""
+            return
+        }
+        this.g.Hide()
+        this.pane.Clear()
+    }
+
+    ; This card stays on screen, and the next lookup gets a new live card
+    Pin() {
+        global Popup
+        if (this.isPinned || !this.st.HasProp("word"))
+            return
+        this.isPinned := true
+        SetTimer(this.closer, 0)
+        PopupCard.pinned.Push(this)
+        if (Popup == this)
+            Popup := PopupCard()
+        this.Render()                           ; the pin becomes an x
     }
 
     ; Run the whole lookup again, in place: same word, same sentence, same
     ; corner of the screen. Answers that arrived are cached and come back at
     ; once; the ones that failed are asked for again.
-    static Again() {
+    Again() {
         st := this.st
         if st.HasProp("word")           ; the same kind of card again: a sentence stays a sentence
-            StartLookup(st.word, st.context, Popup, this.anchor, false, st.mode)
+            StartLookup(st.word, st.context, this, this.anchor, false, st.mode)
     }
 
     ; the Translate | Summary switch: same text, same place, the other card
-    static Switch(mode, *) {
+    Switch(mode, *) {
         st := this.st
         if st.HasProp("word")
-            StartLookup(st.word, st.context, Popup, this.anchor, false, mode, true)
+            StartLookup(st.word, st.context, this, this.anchor, false, mode, true)
     }
 
-    static Choose(key) {
+    Choose(key) {
         this.st.choice := key, this.st.userChose := true
         this.Render()
     }
 
-    static ToggleMore() {
+    ToggleMore() {
         st := this.st
         st.expanded := !st.expanded
         st.lockH := st.expanded ? this.h : 0
         this.Render()
     }
 
-    static Save() {
+    Save() {
         if !this.st.lk
             return
         res := Store.Upsert(BuildRecord(this.st))
@@ -191,5 +237,39 @@ class Popup {
         this.Render()
         Dict.Refresh()
     }
+
+    ; every card on screen whose pane the wheel might be over: the live one
+    ; first, as it sits on top of any pinned one it covers
+    static Panes() {
+        out := []
+        if Popup.visible
+            out.Push(Popup.pane)
+        for card in PopupCard.pinned
+            out.Push(card.pane)
+        return out
+    }
+
+    ; A pinned card is dragged by any part of it that is not a link: the click
+    ; is handed to Windows as a click on a title bar (WM_LBUTTONDOWN)
+    static DragPinned(wParam, lParam, msg, hwnd) {
+        if LinkHwnds.Has(hwnd)
+            return
+        root := DllCall("GetAncestor", "ptr", hwnd, "uint", 2, "ptr")     ; GA_ROOT
+        for card in PopupCard.pinned
+            if (card.g && card.g.Hwnd = root) {
+                PostMessage(0xA1, 2, 0, , root)                         ; WM_NCLBUTTONDOWN, HTCAPTION
+                return 0
+            }
+    }
 }
 
+; The pin at the top of a popup card, or the x of one already pinned - one of
+; the actions CardLinks() draws. Nothing for the word list's pane, which is not
+; a popup.
+PinAction(owner) {
+    if !(owner is PopupCard)
+        return ""
+    return owner.isPinned
+        ? {text: Chr(0xE711), face: "Segoe MDL2 Assets", color: CMuted, w: 22, fn: (*) => owner.Close()}
+        : {text: Chr(0xE718), face: "Segoe MDL2 Assets", color: CDim, w: 22, fn: (*) => owner.Pin()}
+}

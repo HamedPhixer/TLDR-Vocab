@@ -29,16 +29,23 @@ class Flow {
         return this.Text(text, (color != "") ? color : CDim, "s7 Bold", "", 3)
     }
 
-    ; RTL reading order, right-aligned: punctuation lands where Persian expects
-    Fa(text, font := "s12 Norm", color := "", indent := 0) {
-        return this.Text(text, (color != "") ? color : CGreen, font, "Right +E0x2000", 2, indent, FontFa)
+    ; A translation, in the chosen language - or in code, for a word saved in
+    ; another one. Right-to-left languages get RTL reading order and are
+    ; right-aligned, so punctuation lands where they expect it, and are wrapped
+    ; at spaces (WrapByWords); the rest are ordinary text.
+    Tr(text, font := "s12 Norm", color := "", indent := 0, code := "") {
+        color := (color != "") ? color : CGreen
+        if Lang.Rtl(code)
+            return this.Text(text, color, font, "Right +E0x2000", 2, indent, FontFa)
+        return this.Text(text, color, font, "", 2, indent)
     }
 }
 
-; Windows wraps Persian inside a word: it breaks between two letters that do
-; not join, so "dashtan" can end a line as its first two letters. English only
-; ever breaks at a space. So Persian is split into lines here, at spaces, each
-; line measured with the control's own font, and the control just shows them.
+; Windows wraps right-to-left text inside a word: Persian breaks between two
+; letters that do not join, so "dashtan" can end a line as its first two
+; letters. English only ever breaks at a space. So right-to-left text is split
+; into lines here, at spaces, each line measured with the control's own font,
+; and the control just shows them.
 WrapByWords(c, text, w) {
     if !InStr(text, " ")
         return
@@ -191,11 +198,29 @@ OnSetCursor(wParam, lParam, msg, hwnd) {
 ; Actions are laid out right to left, so the first in the list is the rightmost
 ; and each one carries its own width - "delete" needs far less room than
 ; "click again to delete".
+; The links at the top right of a card, laid out right to left - the first in
+; the list is the rightmost - each with its own width. An empty entry is
+; skipped, so a card can leave one out with "". A glyph (the pin) names its
+; font in face. Returns where the leftmost one starts.
+CardLinks(g, x, y, acts) {
+    for a in acts {
+        if !a
+            continue
+        glyph := a.HasProp("face")
+        g.SetFont((glyph ? "s10 Norm c" : "s9 Bold c") a.color, glyph ? a.face : FontUI)
+        x -= a.w
+        Link(g.Add("Text", "x" x " y" (glyph ? y - 1 : y) " w" a.w " Right BackgroundTrans +0x80", a.text), a.fn)
+        x -= 8
+    }
+    return x
+}
+
 Header(f, word, phon, actions, speakWord := "") {
     g := f.g
     right := 0
     for a in actions
-        right += a.w + 8
+        if a
+            right += a.w + 8
     room := f.w - right - 30                        ; 30: the speaker beside it
     ; Decided by the width the word really takes, not its letter count: two
     ; words of 22 letters overran "look up again" at full size. Too wide, and
@@ -226,13 +251,7 @@ Header(f, word, phon, actions, speakWord := "") {
             bottom += ph
         }
     }
-    ax := f.x + f.w
-    for a in actions {
-        g.SetFont("s9 Bold c" a.color, FontUI)
-        ax -= a.w
-        Link(g.Add("Text", "x" ax " y" (wy + 6) " w" a.w " Right BackgroundTrans +0x80", a.text), a.fn)
-        ax -= 8
-    }
+    CardLinks(g, f.x + f.w, wy + 6, actions)
     f.y := bottom + 2
 }
 
@@ -245,10 +264,11 @@ SenseRow(f, key, on, text, pick) {
     return Link(f.Text(text, CText, "s9 Norm", "", 3, 14), (*) => pick.Call(key))
 }
 
-FaRow(f, pos, text) {
+; a part of speech and its translations, the way the translator groups them
+TrRow(f, pos, text, code := "") {
     f.g.SetFont("s8 Norm Italic c" CMuted, FontUI)
     f.g.Add("Text", "x" f.x " y" (f.y + 3) " w90 BackgroundTrans +0x80", pos)
-    f.Text(text, CText, "s10 Norm", "Right +E0x2000", 2, 90, FontFa)
+    f.Tr(text, "s10 Norm", CText, 90, code)
 }
 
 Ellipsis(f) => f.Text(Chr(0x2026), CDim, "s9 Norm")
@@ -265,7 +285,7 @@ RenderLookup(g, W, st, owner) {
     f := Flow(g, 14, 10, W - 28)
     saved := Store.Find(st.word)
     action := (st.flash != "") ? st.flash : saved ? "saved " Chr(0x2713) : "+ save"
-    acts := [{text: action, color: (saved || st.flash != "") ? CMuted : CGreen, w: 84, fn: (*) => owner.Save()}]
+    acts := [PinAction(owner), {text: action, color: (saved || st.flash != "") ? CMuted : CGreen, w: 84, fn: (*) => owner.Save()}]
     if lk        ; a source that answered with nothing is worth another try
         acts.Push({text: "look up again", color: CBlue, w: 94, fn: (*) => owner.Again()})
     Header(f, st.word, (lk && lk.def.data) ? Dig(lk.def.data, "phonetic") : "", acts, st.word)
@@ -293,7 +313,7 @@ RenderLookup(g, W, st, owner) {
             a := lk.ai.data
             SenseRow(f, "ai", Chosen(st) = "ai", a["meaning"] ((a["pos"] != "") ? "  (" a["pos"] ")" : ""), pick)
             if (a["persian"] != "")
-                f.Fa(a["persian"])
+                f.Tr(a["persian"])
             if (a["note"] != "")
                 f.Text(a["note"], CAmber, "s8 Norm", "", 3, 14)
         } else if KeyTrouble(lk)
@@ -302,16 +322,16 @@ RenderLookup(g, W, st, owner) {
             f.Text("Gemini: " lk.ai.note, CDim, "s8 Norm Italic")
     }
 
-    f.Label("PERSIAN")
+    f.Label(Lang.Label())
     if (!lk || !lk.fa.done)
         Ellipsis(f)
     else if lk.fa.data {
         fa := lk.fa.data
         if (fa["main"] != "")
-            f.Fa(fa["main"])
+            f.Tr(fa["main"])
         for i, grp in fa["groups"]
             if (i <= 3)
-                FaRow(f, grp["pos"], Join(grp["terms"], Chr(0x060C) " ", 5))
+                TrRow(f, grp["pos"], Join(grp["terms"], Lang.Sep(), 5))
     } else
         f.Text("no translation found  (" Join(lk.fa.tried, ", ") ")", CDim, "s8 Norm Italic")
 
@@ -331,8 +351,8 @@ RenderLookup(g, W, st, owner) {
                     break
                 key := "g" gi "." si
                 SenseRow(f, key, Chosen(st) = key, s["d"], pick)
-                if (s["fa"] != "")
-                    f.Fa(s["fa"], "s9 Norm", CGreen, 14)
+                if ((tr := Lang.SenseTr(lk.def.data, s)) != "")
+                    f.Tr(tr, "s9 Norm", CGreen, 14)
                 if (st.expanded && s["ex"] != "")
                     f.Text(Chr(0x201C) s["ex"] Chr(0x201D), CMuted, "s8 Norm Italic", "", 3, 14)
                 shown++
@@ -370,6 +390,7 @@ RenderLookup(g, W, st, owner) {
 ; below pick what that is - Gemini's meaning, or any stored definition.
 RenderEntry(g, W, st) {
     rec := st.rec
+    code := (Dig(rec, "lang") != "") ? rec["lang"] : "fa"     ; saved before there was a choice: Persian
     EnsureAi(rec)
     pick := ObjBindMethod(Dict, "ChooseSaved")
     f := Flow(g, 14, 10, W - 28)
@@ -387,7 +408,7 @@ RenderEntry(g, W, st) {
     if sub.Length
         f.Text(Join(sub, "   "), CMuted, "s9 Norm")
     if (Dig(rec, "persian") != "")
-        f.Fa(rec["persian"], "s13 Norm")
+        f.Tr(rec["persian"], "s13 Norm", "", 0, code)
     if (Dig(rec, "meaning") != "")
         f.Text(rec["meaning"], CText, "s10 Norm", "", 4)
 
@@ -399,7 +420,7 @@ RenderEntry(g, W, st) {
         SenseRow(f, "ai", gem == Dig(rec, "meaning")
             , gem ((Dig(ai, "pos") != "") ? "  (" ai["pos"] ")" : ""), pick)
         if (Dig(ai, "persian") != "")
-            f.Fa(ai["persian"], "s11 Norm")
+            f.Tr(ai["persian"], "s11 Norm", "", 0, code)
         if (Dig(ai, "note") != "")
             f.Text(ai["note"], CAmber, "s8 Norm", "", 3, 14)
     }
@@ -416,9 +437,9 @@ RenderEntry(g, W, st) {
     }
     fa := Dig(rec, "fa")
     if (fa is Map && Dig(fa, "groups") is Array && fa["groups"].Length) {
-        f.Label("PERSIAN")
+        f.Label(Lang.Label(code))
         for grp in fa["groups"]
-            FaRow(f, grp["pos"], Join(grp["terms"], Chr(0x060C) " ", 6))
+            TrRow(f, grp["pos"], Join(grp["terms"], Lang.Sep(code), 6), code)
     }
     defs := Dig(rec, "defs") || []
     if defs.Length {
@@ -428,7 +449,7 @@ RenderEntry(g, W, st) {
             for si, s in grp["senses"] {
                 SenseRow(f, "g" gi "." si, s["d"] == rec["meaning"], s["d"], pick)
                 if (Dig(s, "fa") != "")
-                    f.Fa(s["fa"], "s9 Norm", CGreen, 14)
+                    f.Tr(s["fa"], "s9 Norm", CGreen, 14, code)
                 if (Dig(s, "ex") != "")
                     f.Text(Chr(0x201C) s["ex"] Chr(0x201D), CMuted, "s8 Norm Italic", "", 3, 14)
             }

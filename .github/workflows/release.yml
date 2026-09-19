@@ -42,7 +42,10 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+        # notes from CHANGELOG.md (build.ps1); a version with a dash in it -
+        # 1.1.0-beta.1 - is a pre-release, which the "latest" link skips
         run: |
           $v = $env:GITHUB_REF_NAME.TrimStart("v")
+          $pre = if ($v.Contains("-")) { "--prerelease" } else { "--latest" }
           gh release create $env:GITHUB_REF_NAME dist/TLDR-Vocab-$v-portable.zip dist/TLDR-Vocab-$v.zip dist/manifest.json `
-            --title "TLDR Vocab $v" --generate-notes
+            --title "TLDR Vocab $v" --notes-file dist/notes.md $pre

@@ -1,13 +1,15 @@
 # TLDR Vocab
 
-**Point at any English text on your screen and understand it — in plain English and in Persian.**
+**Point at any English text on your screen and understand it — in plain English and in your own language.**
 
 A word in a game, a line of dialogue in a paused video, a paragraph in a blog: press a key, and a
-small card appears beside it with the meaning, the pronunciation, and the Persian. It reads the
+small card appears beside it with the meaning, the pronunciation, and the translation. It reads the
 screen itself (Windows' own OCR), so it works on anything you can see — not only on text you can
 select.
 
-For Windows 10 and 11. English → Persian.
+For Windows 10 and 11. English → Persian by default, or any of 18 other languages (Settings → Translation):
+Arabic, Urdu, Turkish, Spanish, French, German, Italian, Portuguese, Dutch, Polish, Russian, Ukrainian,
+Hindi, Indonesian, Vietnamese, Chinese, Japanese and Korean.
 
 ## Download
 
@@ -26,7 +28,7 @@ All of them can be changed — or switched off — in Settings.
 
 | Keys | What it does |
 |---|---|
-| **Win + Click** | The word you click on: meaning, pronunciation, Persian, and the meaning that fits the sentence it is in. The click never reaches the window underneath. |
+| **Win + Click** | The word you click on: meaning, pronunciation, translation, and the meaning that fits the sentence it is in. The click never reaches the window underneath. |
 | **Shift + Win + Click** | **Translate**: the text you click on, explained in plain English and translated. A line that ends with `. ! ? : ;` ends it; up to ten sentences are taken. |
 | **Ctrl + Win + Click** | **Summary**: the whole block of text under the mouse, summarised in both languages — a game note, a blog post. |
 | **Win + `** | Whatever text is selected (\` is the key left of 1). |
@@ -38,9 +40,12 @@ The selection and the box pick the card by length: a few words get the dictionar
 gets Translate, anything longer gets Summary. Wrong guess? Click **TRANSLATE | SUMMARY** at the top
 of the card to redo the same text the other way.
 
+**Pin a card** to keep it: the pin at its top right leaves it on screen, where you can drag it anywhere, and
+its × closes it. The next lookup opens a new card beside it, so you can keep several at once.
+
 ## Gemini (optional, free)
 
-Without a key, word lookups, Persian and pronunciation all work. With a free Gemini key you also get
+Without a key, word lookups, translations and pronunciation all work. With a free Gemini key you also get
 sentences explained in plain English, summaries, and the meaning of a word that fits where you
 found it.
 
@@ -53,7 +58,7 @@ Your key stays in `Vocab.ini` on your PC. It is never part of this repository or
 ## Where the answers come from
 
 - **Definitions:** [freedictionaryapi.com](https://freedictionaryapi.com), Wiktionary, Datamuse
-- **Persian and the spoken words:** Google Translate's free web addresses, with Lingva and MyMemory
+- **Translations and the spoken words:** Google Translate's free web addresses, with Lingva and MyMemory
   as fallbacks. These are the addresses Google's own website uses, not an official service: they
   work, but could change or be blocked at any time — the fallbacks, and the Windows voice, then take
   over.
@@ -68,7 +73,21 @@ Your key stays in `Vocab.ini` on your PC. It is never part of this repository or
 | `cache\` | definitions and pronunciations, so a repeat is instant |
 | `errors.log` | only if something goes wrong |
 
-To remove it: quit from the tray icon and delete the folder.
+To remove it: quit from the tray icon and delete the folder (and the Startup shortcut, if you made one).
+
+## Start with Windows
+
+TLDR Vocab does not start with Windows by itself. To make it:
+
+1. Press **Win + R**, type `shell:startup` and press Enter. The Startup folder opens.
+2. In the TLDR Vocab folder, right-click **Start TLDR Vocab.bat** (portable) or **Vocab.ahk** (with AutoHotkey
+   installed) and choose **Show more options → Create shortcut**.
+3. Move the new shortcut into the Startup folder.
+
+From the next sign-in it starts on its own. To stop that, delete the shortcut from the Startup folder.
+
+If *Start as administrator* is on in Settings, Windows asks for permission at every sign-in. It is only needed
+for the selection key in programs that themselves run as administrator, so leave it off unless you need it.
 
 ## Known limits
 
@@ -89,9 +108,28 @@ docs\            decisions.md - why things are the way they are
 build.ps1        builds both zips into dist\
 ```
 
-Written for AutoHotkey v2.0. `.\tests\run-tests.ps1` before a release; `.\build.ps1` to build the
-zips locally. Pushing a tag `vX.Y.Z` (matching `VocabVersion` in `lib\Config.ahk`) makes GitHub build
-both zips and publish the release.
+Written for AutoHotkey v2.0. See [Releasing](#releasing) for how a version is published.
+
+## Releasing
+
+Version numbers are **MAJOR.MINOR.PATCH**:
+
+- **PATCH** (1.0.**1**) — only fixes, nothing new
+- **MINOR** (1.**1**.0) — new features; everything that worked before still does
+- **MAJOR** (**2**.0.0) — a change that breaks something old, such as settings or saved words
+
+A test version gets a suffix: **1.1.0-beta.1**, then **-beta.2**, and so on, until it becomes **1.1.0**. GitHub
+marks those as *pre-releases*, and the "latest release" link above skips them.
+
+To publish a version:
+
+1. Set `VocabVersion` in `lib\Config.ahk`, and add a section for it at the top of [CHANGELOG.md](CHANGELOG.md)
+   — the release notes are taken from there.
+2. Run `.\tests\run-tests.ps1`; everything must pass.
+3. Commit, push, then `git tag -a vX.Y.Z -m "TLDR Vocab X.Y.Z"` and `git push origin vX.Y.Z`.
+
+GitHub then tests the app again, builds both zips and publishes the release. It refuses to if the tag and
+`VocabVersion` differ, or if CHANGELOG.md has no section for that version.
 
 ## Credits
 

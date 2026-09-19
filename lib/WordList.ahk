@@ -54,8 +54,7 @@ class Dict {
         g.Add("Button", "Default Hidden w0 h0", "go").OnEvent("Click", (*) => Dict.Enter())
 
         this.lv := g.Add("ListView", "x18 y80 w300 h200 -E0x200 -Hdr -Multi +LV0x10000 Background" CCard
-            , ["Word", "Persian", "Meaning"])
-        this.lv.ModifyCol(2, "Right")
+            , ["Word", "Translation", "Meaning"])
         this.lv.OnEvent("ItemSelect", ObjBindMethod(Dict, "OnSelect"))
         DarkList(this.lv)
         il := DllCall("comctl32\ImageList_Create", "int", 1, "int", 26, "uint", 0x21, "int", 1, "int", 1, "ptr")
@@ -228,6 +227,7 @@ class Dict {
             return
         q := Trim(this.search.Value)
         this.lv.Opt("-Redraw")
+        this.lv.ModifyCol(2, Lang.Rtl() ? "Right" : "Left")    ; the translation reads the way its language does
         this.lv.Delete()
         n := 0, i := Store.words.Length, sel := 0
         while (i >= 1) {
@@ -289,7 +289,7 @@ class Dict {
             if !s
                 return
             rec["meaning"] := s["d"], rec["pos"] := grp["pos"]
-            p := (Dig(s, "fa") != "") ? s["fa"] : FaForPos(Dig(rec, "fa"), grp["pos"])
+            p := (Dig(s, "fa") != "") ? s["fa"] : FaForPos(Dig(rec, "fa"), grp["pos"], Dig(rec, "lang"))
             if (p = "")
                 p := Dig(rec, "fa", "main")
             if (p != "")
@@ -398,7 +398,9 @@ class Dict {
 ; The three helpers are exported by number only, and DllCall cannot call by
 ; number - so they are looked up with GetProcAddress and called by address.
 ; Each is skipped if this Windows lacks it; the theme is applied regardless.
-DarkList(lv) {
+; A drop-down list takes the same, with the theme Windows made for combo boxes
+; (Settings' language list: theme "DarkMode_CFD").
+DarkList(lv, theme := "DarkMode_Explorer") {
     static ux := DllCall("LoadLibrary", "str", "uxtheme.dll", "ptr")
     static setMode := DllCall("GetProcAddress", "ptr", ux, "ptr", 135, "ptr")   ; SetPreferredAppMode
     static flush   := DllCall("GetProcAddress", "ptr", ux, "ptr", 136, "ptr")   ; FlushMenuThemes
@@ -409,7 +411,7 @@ DarkList(lv) {
         DllCall(flush)
     if allow
         DllCall(allow, "ptr", lv.Hwnd, "int", 1)
-    DllCall("uxtheme\SetWindowTheme", "ptr", lv.Hwnd, "str", "DarkMode_Explorer", "ptr", 0)
+    DllCall("uxtheme\SetWindowTheme", "ptr", lv.Hwnd, "str", theme, "ptr", 0)
 }
 
 DictNcCalc(wParam, lParam, msg, hwnd) {
@@ -457,14 +459,17 @@ DictMouseDown(wParam, lParam, msg, hwnd) {
     }
 }
 
-; The wheel scrolls whichever pane the pointer is over - the popup first, as
-; it sits on top - and otherwise leaves the message to the list
+; The wheel scrolls whichever pane the pointer is over - the popups first, the
+; live one then the pinned ones, as they sit on top - and otherwise leaves the
+; message to the list
 PaneWheel(wParam, lParam, msg, hwnd) {
     MouseGetPos(&mx, &my)
     delta := (wParam >> 16) & 0xFFFF
     if (delta > 0x7FFF)
         delta -= 0x10000
-    for sp in [Popup.visible ? Popup.pane : "", Dict.pane]
+    panes := PopupCard.Panes()
+    panes.Push(Dict.pane)
+    for sp in panes
         if (sp && sp.Over(mx, my)) {
             sp.ScrollBy(Round(-delta / 120 * 60))
             return 0

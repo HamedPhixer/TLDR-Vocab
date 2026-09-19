@@ -3,12 +3,12 @@
 ;================================================================================
 ; The TRANSLATE card; the code calls it "sentence", as saved records do.
 ; Shift + Win + Click on any sentence on screen. It is read with the same OCR as the
-; word lookup, then shown in plain English and in Persian. A selection of more
+; word lookup, then shown in plain English and translated. A selection of more
 ; than four words (Win + `) comes here too, since a dictionary has nothing to
 ; say about a sentence.
 ;
 ; WHAT NEEDS WHAT
-;   the Persian     the ordinary translators, so it works with no Gemini key
+;   the translation the ordinary translators, so it works with no Gemini key
 ;   plain English   Gemini only. Without a key that section says so, and the
 ;                   translation still stands on its own.
 ;
@@ -237,16 +237,10 @@ RenderSentence(g, W, st, owner) {
         Link(g.Add("Text", "x" sx " y" f.y " w20 BackgroundTrans +0x80", Chr(0xE767))
             , (*) => Speak.Say(st.word))
     }
-    acts := [{text: action, color: (saved || st.flash != "") ? CMuted : CGreen, w: 84, fn: (*) => owner.Save()}]
+    acts := [PinAction(owner), {text: action, color: (saved || st.flash != "") ? CMuted : CGreen, w: 84, fn: (*) => owner.Save()}]
     if lk
         acts.Push({text: "look up again", color: CBlue, w: 94, fn: (*) => owner.Again()})
-    ax := f.x + f.w
-    for a in acts {
-        g.SetFont("s9 Bold c" a.color, FontUI)
-        ax -= a.w
-        Link(g.Add("Text", "x" ax " y" (f.y + 2) " w" a.w " Right BackgroundTrans +0x80", a.text), a.fn)
-        ax -= 8
-    }
+    CardLinks(g, f.x + f.w, f.y + 2, acts)
     f.y += 26
 
     shown := (ai && Dig(ai, "fixed") != "") ? ai["fixed"] : st.word
@@ -266,13 +260,13 @@ RenderSentence(g, W, st, owner) {
     else
         f.Text("Gemini: " lk.ai.note, CDim, "s8 Norm Italic")
 
-    f.Label("PERSIAN")
+    f.Label(Lang.Label())
     if (ai && Dig(ai, "persian") != "")
-        f.Fa(ai["persian"], "s12 Norm")
+        f.Tr(ai["persian"], "s12 Norm")
     else if (!lk || !lk.fa.done)
         Ellipsis(f)
     else if (lk.fa.data && lk.fa.data["main"] != "")
-        f.Fa(lk.fa.data["main"], "s12 Norm")
+        f.Tr(lk.fa.data["main"], "s12 Norm")
     else
         f.Text("no translation found  (" (lk ? Join(lk.fa.tried, ", ") : "") ")", CDim, "s8 Norm Italic")
 
@@ -281,7 +275,7 @@ RenderSentence(g, W, st, owner) {
 
     if lk {
         ; Google only while its translation is the one on the card: once
-        ; Gemini's Persian has replaced it, naming Google would mislead
+        ; Gemini's translation has replaced it, naming Google would mislead
         src := []
         if (lk.fa.source != "" && !(ai && Dig(ai, "persian") != ""))
             src.Push(lk.fa.source (lk.fa.cached ? " (saved copy)" : ""))
@@ -352,7 +346,7 @@ SentenceRecord(st) {
     return Map("word", (ai && Dig(ai, "fixed") != "") ? ai["fixed"] : st.word
         , "kind", "sentence", "lemma", "", "pos", "sentence", "phonetic", ""
         , "meaning", ai ? Dig(ai, "simple") : ""
-        , "persian", (ai && Dig(ai, "persian") != "") ? ai["persian"] : (fa ? fa["main"] : "")
+        , "persian", (ai && Dig(ai, "persian") != "") ? ai["persian"] : (fa ? fa["main"] : ""), "lang", Lang.Code()
         , "note", ai ? Dig(ai, "note") : "", "ai", ai ? ai : ""
         , "examples", [], "defs", [], "fa", fa ? fa : Map()
         , "added", Now(), "source", Join(src, ", ")

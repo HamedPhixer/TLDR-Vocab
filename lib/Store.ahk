@@ -48,7 +48,7 @@ class Store {
             return "saved"
         }
         old := Store.words[i]
-        for k in ["meaning", "persian", "pos", "note", "lemma", "phonetic", "defs", "fa", "ai", "source"]
+        for k in ["meaning", "persian", "lang", "pos", "note", "lemma", "phonetic", "defs", "fa", "ai", "source"]
             if (rec.Has(k) && (IsObject(rec[k]) || rec[k] != ""))
                 old[k] := rec[k]
         if !(Dig(old, "examples") is Array)
@@ -140,7 +140,7 @@ BuildRecord(st) {
         s := Dig(grp, "senses", Integer(m[2]))
         if s {
             meaning := s["d"], pos := grp["pos"]
-            persian := (s["fa"] != "") ? s["fa"] : FaForPos(fa, pos)
+            persian := ((tr := Lang.SenseTr(def, s)) != "") ? tr : FaForPos(fa, pos)
         }
     }
     if (persian = "" && fa)
@@ -161,6 +161,7 @@ BuildRecord(st) {
         if (t.source != "")
             src.Push(t.source)
     groups := []
+    same := Lang.SensesMatch(def)       ; senses translated in another language are saved without it
     if def
         for gi, grp in def["groups"] {
             if (gi > 10)
@@ -168,26 +169,26 @@ BuildRecord(st) {
             keep := []
             for si, s in grp["senses"]
                 if (si <= 30)
-                    keep.Push(s)
+                    keep.Push(same ? s : Map("d", s["d"], "ex", Dig(s, "ex"), "fa", "", "low", Dig(s, "low")))
             groups.Push(Map("pos", grp["pos"], "of", Dig(grp, "of"), "senses", keep))
         }
     return Map("word", st.word, "lemma", lemma, "pos", pos, "phonetic", def ? Dig(def, "phonetic") : ""
-        , "meaning", meaning, "persian", persian, "note", ai ? ai["note"] : ""
+        , "meaning", meaning, "persian", persian, "lang", Lang.Code(), "note", ai ? ai["note"] : ""
         , "ai", ai ? ai : ""
         , "examples", examples, "defs", groups, "fa", fa ? fa : Map()
         , "added", Now(), "source", Join(src, ", ")
         , "review", Map("box", 1, "due", "", "reviews", 0, "lapses", 0, "history", []))
 }
 
-; Google's Persian for the part of speech of the chosen definition: saving
+; The translator's terms for the part of speech of the chosen definition: saving
 ; "bank" the river edge should not save the word for the money place.
-FaForPos(fa, pos) {
+FaForPos(fa, pos, code := "") {
     groups := Dig(fa, "groups")
     if !(groups is Array)
         return ""
     for grp in groups
         if (grp["pos"] = pos)
-            return Join(grp["terms"], Chr(0x060C) " ", 3)
+            return Join(grp["terms"], Lang.Sep(code), 3)
     return ""
 }
 

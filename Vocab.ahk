@@ -48,15 +48,20 @@
 ;   "+ N more" never makes it jump. Sections:
 ;     IN THIS SENTENCE  the sentence the word was in (cut at its full stops,
 ;                       tidied by Gemini once it answers), then Gemini's
-;                       reading of the word there, with the Persian for THAT
-;                       meaning (only with a key)
-;     PERSIAN           the translation, plus alternatives per part of speech
+;                       reading of the word there, with the translation of
+;                       THAT meaning (only with a key)
+;     PERSIAN           the translation, plus alternatives per part of speech -
+;                       headed with whichever language Settings > TRANSLATION
+;                       names; Persian unless changed. See Language.ahk
 ;     DEFINITIONS       one line from each dictionary entry, so a word with two
 ;                       unrelated meanings shows both; "+ N more" opens the rest
 ;   The green dot marks the meaning that will be saved - Gemini's when there is
 ;   one, otherwise the first definition. Click any other definition to pick it
-;   instead. "+ save" keeps the word, that meaning, the Persian that goes with
-;   it, and the sentence you found it in.
+;   instead. "+ save" keeps the word, that meaning, the translation that goes
+;   with it, and the sentence you found it in.
+;   The pin at the top right keeps the popup: it stays on screen, drags
+;   anywhere, and closes with its x; the next lookup opens a new popup beside
+;   it. See Popup.ahk
 ;
 ; THE DICTIONARY WINDOW
 ;   An ordinary window with a taskbar button, not always on top. Drag it by
@@ -124,6 +129,7 @@ OnMessage(0x83, DictNcCalc)             ; WM_NCCALCSIZE
 OnMessage(0x84, DictHitTest)            ; WM_NCHITTEST
 OnMessage(0x86, DictNcActivate)         ; WM_NCACTIVATE
 OnMessage(0x201, DictMouseDown)         ; WM_LBUTTONDOWN - the divider
+OnMessage(0x201, ObjBindMethod(PopupCard, "DragPinned"))   ; - and moving a pinned popup
 OnMessage(0x20A, PaneWheel)             ; WM_MOUSEWHEEL
 OnMessage(0x20, OnSetCursor)            ; WM_SETCURSOR
 OnMessage(0x232, DictMoved)             ; WM_EXITSIZEMOVE

@@ -79,6 +79,31 @@ at `:` or `;` left Gemini half a sentence of context.
 - **The Windows voice is a fallback and is never saved**, so the next time
   Google answers, the word gets a real recording.
 
+## The translation language (1.1.0)
+
+- **Only the language translations go into is a choice.** What is read stays English: the OCR, picking the
+  word, the pronunciation symbols and the base-form rules are all English-specific, and making them general
+  is a much bigger job than the translation side, where every translator already takes any pair.
+- **Everything language-specific is in `lib\Language.ahk`**; no other file names a language.
+- **The saved data kept its Persian names.** `"persian"` holds the translation and `"fa"` its details,
+  whatever the language — renaming them would have meant rewriting every saved `words.json`. Each record
+  saved since notes its language in `"lang"`; one without it is Persian.
+- **Gemini is asked for `"translation"`,** not `"persian"`: a Spanish answer under a key called "persian"
+  invites confusion. The reply is filed under the old name as soon as it arrives.
+- **Definitions are cached once for all languages,** but some senses carry a short translation, in the
+  language of the day. Those carry `"faLang"`, and are only shown in that language.
+
+## Pinned cards (1.1.0)
+
+- **The popup became a class with instances** (`PopupCard`), and the global `Popup` always holds the live
+  one. Everything that called `Popup.Something()` kept working unchanged; pinning moves the card into a
+  list and puts a fresh card in `Popup`. The alternative — a second popup class — would have copied
+  200 lines.
+- **A pinned card is dragged by any empty part of it,** handed to Windows as a title-bar click. There is
+  no title bar to add, and links still work because a click on a link is never passed on.
+- **Pinning is one way:** a pinned card closes, it does not unpin. Unpinning would need to decide what
+  happens to the live card already showing.
+
 ## Keys
 
 - **A custom recorder,** because AutoHotkey's Hotkey control cannot record the

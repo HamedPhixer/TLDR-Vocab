@@ -4,7 +4,7 @@
 ; The SUMMARY card; the code calls it "paragraph".
 ; Ctrl + Win + Click anywhere in a block of text: a game's lore note, a blog
 ; paragraph, a wall of patch notes. It comes back as two or three sentences of
-; plain English and the same in Persian.
+; plain English and the same translated.
 ;
 ; WHY IT READS THE WHOLE MONITOR
 ; A strip around the pointer cannot work here: make it big enough for three
@@ -171,11 +171,8 @@ RenderParagraph(g, W, st, owner) {
     f := Flow(g, 14, 10, W - 28)
 
     ModeSwitch(g, f, st, owner)
-    if lk {
-        g.SetFont("s9 Bold c" CBlue, FontUI)
-        Link(g.Add("Text", "x" (f.x + f.w - 94) " y" (f.y + 2) " w94 Right BackgroundTrans +0x80", "look up again")
-            , (*) => owner.Again())
-    }
+    CardLinks(g, f.x + f.w, f.y + 2, [PinAction(owner)
+        , lk ? {text: "look up again", color: CBlue, w: 94, fn: (*) => owner.Again()} : ""])
     f.y += 26
 
     f.Label("IN SIMPLE ENGLISH", CBlue)
@@ -190,13 +187,13 @@ RenderParagraph(g, W, st, owner) {
     else
         f.Text("Gemini: " lk.ai.note, CDim, "s8 Norm Italic")
 
-    f.Label("PERSIAN")
+    f.Label(Lang.Label())
     if (ai && Dig(ai, "persian") != "")
-        f.Fa(ai["persian"], "s11 Norm")
+        f.Tr(ai["persian"], "s11 Norm")
     else if (!lk || !lk.fa.done)
         Ellipsis(f)
     else if (lk.fa.data && lk.fa.data["main"] != "") {
-        f.Fa(lk.fa.data["main"], "s11 Norm")
+        f.Tr(lk.fa.data["main"], "s11 Norm")
         f.Text("translated line by line, not summarised", CDim, "s7 Norm Italic")
     } else
         f.Text("no translation found", CDim, "s8 Norm Italic")

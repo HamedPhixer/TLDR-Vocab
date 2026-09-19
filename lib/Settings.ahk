@@ -1,15 +1,17 @@
 ;================================================================================
 ; Settings.ahk - the settings window
 ;================================================================================
-; Tray menu > Settings. Five sections, all kept in Vocab.ini and all working
+; Tray menu > Settings. Six sections, all kept in Vocab.ini and all working
 ; the moment they change - there is no Save button - except administrator,
 ; which can only take effect at the next start:
+;   TRANSLATION  the language translations go into (Language.ahk)
 ;   GEMINI    the key (hidden unless "show" is clicked), a "test" that asks
 ;             Google whether the key is good, the link to get a free one, and
 ;             the model (empty = automatic)
 ;   NETWORK   the proxy - see Http.Proxy in Lookup.ahk
 ;   SOUND     the speaker buttons, and saying each word as it is looked up
-;   GENERAL   start as administrator - see the top of Vocab.ahk
+;   GENERAL   start as administrator - see the top of Vocab.ahk - and a
+;             link to the README's "Start with Windows"
 ;   KEYS      the key rows from Keys.ahk
 ;
 ; "test" asks for the list of models, one row of it. That proves the key and
@@ -59,7 +61,7 @@ KeyTrouble(lk) => (lk && (!lk.ai.enabled || InStr(lk.ai.note, "key rejected")))
 
 class Settings {
     static g := "", key := "", showLink := "", model := "", proxy := "", noteBox := ""
-    static speak := "", auto := "", admin := "", saver := "", tester := "", req := "", shown := false
+    static speak := "", auto := "", admin := "", lang := "", saver := "", tester := "", req := "", shown := false
 
     static Show(section := "") {
         if !this.g
@@ -92,12 +94,27 @@ class Settings {
         g.SetFont("s9 Norm c" CDim, FontUI)
         g.Add("Text", "x478 y20 w100 Right BackgroundTrans +0x80", AppName " " VocabVersion)
 
+        ; TRANSLATION
+        y := this.Head(g, 72, "TRANSLATION")
+        this.Label(g, y, "Into")
+        names := []
+        for l in Lang.List
+            names.Push(l.name)
+        g.SetFont("s10 Norm c" CText, FontUI)
+        this.lang := g.Add("DropDownList", "x100 y" y " w200 r12", names)
+        DarkList(this.lang, "DarkMode_CFD")
+        this.lang.OnEvent("Change", (*) => Settings.PickLanguage())
+        g.SetFont("s8 Norm c" CDim, FontUI)
+        g.Add("Text", "x314 y" (y + 1) " w264 BackgroundTrans +0x80"
+            , "What you read is always English. Words you saved keep the language they were saved in.")
+        y += 42
+
         ; GEMINI
-        y := this.Head(g, 72, "GEMINI")
+        y := this.Head(g, y + 6, "GEMINI")
         g.SetFont("s9 Norm c" CMuted, FontUI)
         g.Add("Text", "x22 y" y " w556 BackgroundTrans +0x80"
             , "Explains sentences in plain English, writes the summaries, and picks the meaning of a word "
-            . "that fits where you found it. Without a key, the dictionary, the Persian and the "
+            . "that fits where you found it. Without a key, the dictionary, the translation and the "
             . "pronunciation all still work.")
         y += 50
         this.Label(g, y, "Key")
@@ -149,7 +166,11 @@ class Settings {
         g.Add("Text", "x44 y" (y + 22) " w534 BackgroundTrans +0x80"
             , "Only needed for the selection key in programs that themselves run as administrator. "
             . "Windows asks each time " AppName " starts. Takes effect from the next start.")
-        y += 62
+        y += 58
+        g.SetFont("s9 Norm c" CBlue, FontUI)
+        Link(g.Add("Text", "x22 y" y " BackgroundTrans +0x80", "Start " AppName " with Windows - how")
+            , (*) => Run(RepoUrl "#start-with-windows"))
+        y += 30
 
         ; KEYS
         y := this.Head(g, y + 6, "KEYS")
@@ -199,6 +220,9 @@ class Settings {
         this.speak.Value := SpeakOn ? 1 : 0
         this.auto.Value := SpeakAuto ? 1 : 0
         this.admin.Value := (IniRead(ini, "General", "RunAsAdmin", 0) = 1) ? 1 : 0
+        for i, l in Lang.List
+            if (l.code = Lang.Code())
+                this.lang.Value := i
         this.Note("")
     }
 
@@ -227,6 +251,12 @@ class Settings {
         this.g.Hide()
     }
 
+    ; a new language is used from the next lookup; the word list's column
+    ; turns to match it
+    static PickLanguage() {
+        Lang.Set(Lang.List[this.lang.Value].code)
+        Dict.Refresh()
+    }
     static Note(msg, color := "") {
         this.noteBox.SetFont("c" (color != "" ? color : CMuted))
         this.noteBox.Text := msg

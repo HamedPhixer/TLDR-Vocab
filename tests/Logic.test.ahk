@@ -86,6 +86,37 @@ for c in cases {
         Check("popup side: " c[1], Popup.side, c[3])
 }
 
+;--- the translation language ----------------------------------------------------
+Check("language: default is Persian", Lang.Find("").code, "fa")
+Check("language: unknown falls back to Persian", Lang.Find("xx").code, "fa")
+CheckTrue("language: Persian is right-to-left", Lang.Rtl("fa"))
+CheckTrue("language: Spanish is not", !Lang.Rtl("es"))
+Check("language: Persian comma", Lang.Sep("fa"), Chr(0x060C) " ")
+Check("language: plain comma", Lang.Sep("de"), ", ")
+Check("language: label", Lang.Label("es"), "SPANISH")
+saved := Lang.current
+Lang.current := Lang.Find("zh-CN")
+Check("language: Lingva's own code", Lang.Lingva(), "zh")
+Check("language: its own cache", Lang.CacheKind(), "fa.zh-CN")
+fake := {mode: "word", word: "bank", context: "The boat reached the bank."}
+CheckHas("language: the word prompt names it", AiTrack.Prompt(fake), "Chinese (Simplified) speaker", '"translation"')
+fake.mode := "sentence"
+CheckHas("language: the sentence prompt names it", AiTrack.Prompt(fake), "Chinese (Simplified) speaker", "translation: a natural Chinese (Simplified)")
+CheckTrue("language: old senses are not shown in a new language", !Lang.SensesMatch(Map("groups", [])))
+Lang.current := Lang.Find("fa")
+CheckTrue("language: old senses are Persian", Lang.SensesMatch(Map("groups", [])))
+Check("language: the old cache name stays", Lang.CacheKind(), "fa")
+Lang.current := saved
+answer := '{"simple": "It is red.", "translation": "Es rojo.", "fixed": "", "note": ""}'
+part := Map("text", answer)
+reply := {text: Json.Dump(Map("candidates", [Map("content", Map("parts", [part]))]))}
+got := AiTrack.Answer("sentence", reply)
+Check("language: Gemini's translation is filed as before", got ? got["persian"] : "", "Es rojo.")
+
+;--- pinning -------------------------------------------------------------------
+Check("pin: none on the word list", PinAction(Dict), "")
+CheckTrue("pin: a popup has one", IsObject(PinAction(Popup)))
+
 ;--- small helpers -------------------------------------------------------------
 Check("clean word: quotes and comma", CleanWord(Chr(0x201C) "Hello," Chr(0x201D)), "Hello")
 Check("clean word: possessive", CleanWord("harbour's"), "harbour")

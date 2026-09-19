@@ -6,6 +6,7 @@
 ;
 ;   Json       reading and writing JSON
 ;   Config     what is set in the script: version, icon, colours, sizes
+;   Language   the language translations go into
 ;   Lookup     the sources: dictionaries, translators, Gemini, and the cache
 ;   Ocr        Windows' OCR, and reading a piece of the screen
 ;   Lines      turning OCR output into lines of text on a page
@@ -25,6 +26,7 @@
 #Requires AutoHotkey v2.0
 #Include %A_LineFile%\..\Json.ahk
 #Include %A_LineFile%\..\Config.ahk
+#Include %A_LineFile%\..\Language.ahk
 #Include %A_LineFile%\..\Lookup.ahk
 #Include %A_LineFile%\..\Ocr.ahk
 #Include %A_LineFile%\..\Lines.ahk

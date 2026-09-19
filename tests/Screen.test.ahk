@@ -74,4 +74,23 @@ CheckTrue("word: under half a second", ms < 500, ms " ms")
 CheckHas("box: reads what is inside", Box.TextIn(OX + 795, OY + 395, 510, 60), "The guard nodded", "not even the captain")
 
 g.Destroy()
+
+; pinning: a real card, pinned, then a second one beside it (no lookup is
+; attached, so nothing goes to the network - the cards just show their dots)
+first := Popup
+Popup.Begin("harbour", "", {x: 300, y: 200, w: 60, h: 20})
+Popup.Pin()
+CheckTrue("pin: the pinned card stays", first.isPinned && first.visible && PopupCard.pinned.Length = 1)
+CheckTrue("pin: the next lookup gets a new card", !(Popup == first))
+Popup.Begin("quay", "", {x: 900, y: 200, w: 60, h: 20})
+CheckTrue("pin: both on screen", DllCall("IsWindowVisible", "ptr", first.g.Hwnd) && DllCall("IsWindowVisible", "ptr", Popup.g.Hwnd))
+WinMove(500, 500, , , first.g.Hwnd)
+first.Render()
+WinGetPos(&px, &py, , , first.g.Hwnd)
+CheckTrue("pin: a pinned card stays where it was put", px = 500 && py = 500, px "," py)
+Popup.ClickAway()                           ; the mouse is not over the live card
+CheckTrue("pin: a click away closes only the live card", !Popup.visible && first.visible)
+first.Close()
+CheckTrue("pin: its x closes it for good", !PopupCard.pinned.Length && !first.g)
+
 Done()

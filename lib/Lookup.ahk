@@ -1,12 +1,13 @@
 ;================================================================================
-; Lookup.ahk - where definitions and Persian translations come from
+; Lookup.ahk - where definitions and translations come from
 ;================================================================================
 ; Every lookup runs three tracks side by side. Each works down its own list of
 ; free sources and stops at the first one that answers:
 ;
 ;   definitions   freedictionaryapi.com -> Wiktionary -> Datamuse
 ;                 (+ Datamuse for an American pronunciation when none came)
-;   Persian       Google (dictionary client) -> Google (gtx) -> Lingva -> MyMemory
+;   translation   Google (dictionary client) -> Google (gtx) -> Lingva -> MyMemory,
+;                 into the language chosen in Settings (see Language.ahk)
 ;   in context    Gemini, only when a key is set (see GeminiKey below)
 ;
 ; A timeout, an HTTP error, a garbled reply and "no such word" all mean the
@@ -458,6 +459,7 @@ class DefTrack extends Track {
         }
         if (this.phase = "stem")
             result["lemma"] := s.cand
+        result["faLang"] := Lang.Code()     ; what the senses' translations are in
         this.Take(s, result)
         target := Dig(result, "lemmaOf")
         if (this.phase = "word" && target != "" && target != this.lk.query) {
@@ -542,7 +544,7 @@ class DefTrack extends Track {
                     out["lemmaOf"] := DefTrack.FormOf(txt)
                 fa := []
                 for tr in (Dig(s, "translations") || [])
-                    if (Dig(tr, "language", "code") = "fa") {
+                    if (Dig(tr, "language", "code") = Lang.Dict()) {
                         w := DefTrack.NoHarakat(Dig(tr, "word"))
                         if (w != "" && !HasVal(fa, w))
                             fa.Push(w)
@@ -551,7 +553,7 @@ class DefTrack extends Track {
                 for x in (Dig(s, "examples") || [])
                     if ((ex := DefTrack.Plain(x)) != "")
                         break
-                senses.Push(Map("d", txt, "ex", ex, "fa", Join(fa, Chr(0x060C) " ", 3), "low", DefTrack.IsLow(tags, txt)))
+                senses.Push(Map("d", txt, "ex", ex, "fa", Join(fa, Lang.Sep(), 3), "low", DefTrack.IsLow(tags, txt)))
             }
             if senses.Length
                 out["groups"].Push(Map("pos", StrLower(Dig(e, "partOfSpeech")), "senses", DefTrack.LowLast(senses)))
@@ -752,25 +754,25 @@ class DefTrack extends Track {
 }
 
 ;--------------------------------------------------------------------------------
-; Persian: {main, groups: [{pos, terms: [...]}]}
+; The translation: {main, groups: [{pos, terms: [...]}]}
 ; Google's dictionary block is the useful part for a word with several
 ; meanings - bank: noun -> bank / shore / edge / ... - and FaForPos() in
-; Store.ahk uses it to pick the Persian that matches the chosen sense.
+; Store.ahk uses it to pick the translation that matches the chosen sense.
 ;--------------------------------------------------------------------------------
 class FaTrack extends Track {
     Start() {
-        if this.FromCache("fa")
+        if this.FromCache(Lang.CacheKind())
             return
         ; a word is looked up in lower case, but a sentence or a paragraph is
         ; translated as written - and only as much of it as a URL will carry
         q := (this.lk.mode = "word") ? this.lk.query : SubStr(this.lk.word, 1, 1200)
         e := Http.Enc(q)
-        base := "https://translate.googleapis.com/translate_a/single?sl=en&tl=fa&dt=t&dt=bd&q=" e "&client="
+        base := "https://translate.googleapis.com/translate_a/single?sl=en&tl=" Lang.Code() "&dt=t&dt=bd&q=" e "&client="
         this.steps := [
             {name: "Google", url: base "dict-chrome-ex", parse: ObjBindMethod(FaTrack, "Google", q)},
             {name: "Google (gtx)", url: base "gtx", parse: ObjBindMethod(FaTrack, "Google", q)},
-            {name: "Lingva", url: "https://lingva.ml/api/v1/en/fa/" e, parse: ObjBindMethod(FaTrack, "Lingva", q)},
-            {name: "MyMemory", url: "https://api.mymemory.translated.net/get?langpair=en%7Cfa&q=" e
+            {name: "Lingva", url: "https://lingva.ml/api/v1/en/" Lang.Lingva() "/" e, parse: ObjBindMethod(FaTrack, "Lingva", q)},
+            {name: "MyMemory", url: "https://api.mymemory.translated.net/get?langpair=en%7C" Lang.Code() "&q=" e
                 , parse: ObjBindMethod(FaTrack, "MyMemory", q)}
         ]
     }
@@ -810,7 +812,8 @@ class FaTrack extends Track {
 }
 
 ;--------------------------------------------------------------------------------
-; Gemini: {lemma, pos, meaning, persian, note, example}, for THIS sentence
+; Gemini: {lemma, pos, meaning, persian, note, example}, for THIS sentence -
+; "persian" being the translation, in whichever language is chosen
 ;
 ; Model choice is automatic unless Vocab.ini names one: the first lookup asks
 ; the API which models the key can use and lines up the three newest Flash,
@@ -934,20 +937,20 @@ class AiTrack extends Track {
     }
 
     ; A whole sentence, for someone reading a game or a blog: what it says in
-    ; plain English, and a Persian translation that reads naturally rather than
+    ; plain English, and a translation that reads naturally rather than
     ; word by word.
     static SentencePrompt(lk) {
-        return "You help a native Persian (Farsi) speaker who is learning English.`n`n"
+        return "You help a native " Lang.PromptName() " speaker who is learning English.`n`n"
             . "This text - one sentence, or a few short ones that belong together, like a line"
             . " of dialogue - was read off their screen, so it may contain small recognition"
             . " errors or be cut short at either end:`n"
             . Chr(34) lk.word Chr(34) "`n`n"
             . "Reply with JSON only, with exactly these keys:`n"
-            . '{"fixed": "", "simple": "", "persian": "", "note": ""}' "`n`n"
+            . '{"fixed": "", "simple": "", "translation": "", "note": ""}' "`n`n"
             . "fixed: the text with obvious recognition errors repaired; empty if it"
             . " already reads correctly`n"
             . "simple: what it means, in simple English, one or two short sentences`n"
-            . "persian: a natural Persian translation - how a Persian speaker would say it,"
+            . "translation: a natural " Lang.PromptName() " translation - how a native speaker would say it,"
             . " not word for word`n"
             . "note: an idiom, a joke, slang or a reference worth a few words of explanation;"
             . " otherwise empty"
@@ -956,15 +959,15 @@ class AiTrack extends Track {
     ; A note, a blog paragraph, a page of patch notes: what does it actually
     ; say. Short, and in both languages.
     static ParagraphPrompt(lk) {
-        return "You help a native Persian (Farsi) speaker who is learning English.`n`n"
+        return "You help a native " Lang.PromptName() " speaker who is learning English.`n`n"
             . "This text was read off their screen, so it may contain recognition errors, and"
             . " lines belonging to other things on screen may have crept in:`n"
             . Chr(34) lk.word Chr(34) "`n`n"
             . "Reply with JSON only, with exactly these keys:`n"
-            . '{"summary": "", "persian": "", "note": ""}' "`n`n"
+            . '{"summary": "", "translation": "", "note": ""}' "`n`n"
             . "summary: what this text says, in simple English, two or three short sentences."
             . " Ignore anything that clearly belongs to something else on the screen`n"
-            . "persian: the same summary in natural Persian`n"
+            . "translation: the same summary in natural " Lang.PromptName() "`n"
             . "note: a name, a term or a reference worth a few words; otherwise empty"
     }
 
@@ -1024,13 +1027,14 @@ class AiTrack extends Track {
         if !(j is Map)
             return ""
         out := Map()
-        keys := (mode = "sentence") ? ["fixed", "simple", "persian", "note"]
-             : (mode = "paragraph") ? ["summary", "persian", "note"]
-             : ["lemma", "pos", "meaning", "persian", "note", "example", "corrected"]
+        keys := (mode = "sentence") ? ["fixed", "simple", "translation", "note"]
+             : (mode = "paragraph") ? ["summary", "translation", "note"]
+             : ["lemma", "pos", "meaning", "translation", "note", "example", "corrected"]
         for k in keys {
             v := Dig(j, k)
-            out[k] := Trim((v is Array) ? Join(v, Chr(0x060C) " ") : IsObject(v) ? "" : String(v))
+            out[k] := Trim((v is Array) ? Join(v, Lang.Sep()) : IsObject(v) ? "" : String(v))
         }
+        out["persian"] := out.Delete("translation")         ; its name everywhere else - see Language.ahk
         if (mode = "sentence")
             return (out["simple"] = "" && out["persian"] = "") ? "" : out
         if (mode = "paragraph")
@@ -1044,14 +1048,14 @@ class AiTrack extends Track {
         if (lk.mode = "paragraph")
             return AiTrack.ParagraphPrompt(lk)
         ctx := Trim(lk.context)
-        p := "You help a native Persian (Farsi) speaker who is learning English understand words they meet on screen.`n`n"
+        p := "You help a native " Lang.PromptName() " speaker who is learning English understand words they meet on screen.`n`n"
         p .= 'Word or phrase: "' lk.word '"`n'
         if (ctx != "")
             p .= 'Where they saw it (screen text read by OCR, may contain recognition errors): "' ctx '"`n'
         else
             p .= "No sentence is available, so explain its most common meaning.`n"
         p .= "`nReply with JSON only, with exactly these keys:`n"
-            . '{"corrected": "", "lemma": "", "pos": "", "meaning": "", "persian": "", "note": "", "example": ""}' "`n`n"
+            . '{"corrected": "", "lemma": "", "pos": "", "meaning": "", "translation": "", "note": "", "example": ""}' "`n`n"
             . "corrected: the word itself is read off the screen and can come back damaged - a"
             . " letter lost to a highlight box, or two words run together. If it is clearly a"
             . " misreading of a word in the sentence, put the correct word here and answer"
@@ -1059,7 +1063,7 @@ class AiTrack extends Track {
             . "lemma: the dictionary form of the word, or the phrasal verb or idiom it belongs to here`n"
             . "pos: its part of speech here`n"
             . "meaning: the meaning" ((ctx != "") ? " used in THIS sentence" : "") ", in simple English, at most 20 words`n"
-            . "persian: the natural Persian equivalent of that meaning, 1 to 4 words, in Persian script`n"
+            . "translation: the natural " Lang.PromptName() " equivalent of that meaning, 1 to 4 words, written in " Lang.Cur().name "`n"
             . "note: if it is part of an idiom, a phrasal verb or slang here, say so in a few words; otherwise empty`n"
             . "example: " ((ctx != "") ? "the sentence with obvious OCR errors fixed, or empty if it is not a real sentence"
                                        : "one short natural example sentence")

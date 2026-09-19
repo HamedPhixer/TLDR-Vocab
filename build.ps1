@@ -6,6 +6,8 @@
                                         licence and "Start TLDR Vocab.bat"
     manifest.json                       every file of the app with its size and
                                         SHA-256 - for an update check later
+    notes.md                            this version's section of CHANGELOG.md,
+                                        the release notes
 
   The version comes from VocabVersion in lib\Config.ahk. On GitHub the tag
   that started the build must match it (v1.2.0 for "1.2.0"), or nothing is
@@ -26,12 +28,24 @@ if ($env:GITHUB_REF_NAME -and $env:GITHUB_REF_NAME -like "v*" -and $env:GITHUB_R
     throw "Tag $($env:GITHUB_REF_NAME) does not match VocabVersion $version in lib\Config.ahk"
 }
 
+# the release notes: this version's section of CHANGELOG.md, from its "## "
+# heading to the next one. A version without notes is not built.
+$log = Get-Content (Join-Path $root "CHANGELOG.md") -Encoding UTF8
+$start = -1
+for ($i = 0; $i -lt $log.Count; $i++) { if ($log[$i] -match "^## \[?$([regex]::Escape($version))\]?(\s|$)") { $start = $i; break } }
+if ($start -lt 0) { throw "CHANGELOG.md has no section for $version" }
+$end = $log.Count
+for ($i = $start + 1; $i -lt $log.Count; $i++) { if ($log[$i] -match "^## ") { $end = $i; break } }
+$notes = ($log[($start + 1)..($end - 1)] -join "`n").Trim()
+
 $exe = Join-Path $AhkDir "AutoHotkey64.exe"
 $lic = @("license.txt", "AutoHotkey license.txt") | % { Join-Path $AhkDir $_ } | ? { Test-Path $_ } | Select-Object -First 1
 if (-not (Test-Path $exe)) { throw "No AutoHotkey64.exe in $AhkDir" }
 if (-not $lic) { throw "No AutoHotkey licence (license.txt) in $AhkDir" }
 
 if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
+New-Item -ItemType Directory $dist | Out-Null
+[IO.File]::WriteAllText((Join-Path $dist "notes.md"), $notes + "`n", (New-Object Text.UTF8Encoding $false))
 $stage = Join-Path $dist "stage\TLDR Vocab"
 New-Item -ItemType Directory -Force (Join-Path $stage "lib") | Out-Null
 
