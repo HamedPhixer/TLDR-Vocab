@@ -192,6 +192,8 @@ Written for AutoHotkey v2.0.
 
 Design and direction: **HamedPhixer**. Code written with Claude (Anthropic), via Claude Code.
 
+Testing and feedback: [life2088](https://github.com/life2088) — thank you.
+
 The icon: [Dictionary icons created by Magnific - Flaticon](https://www.flaticon.com/free-icons/dictionary).
 
 The portable download includes [AutoHotkey](https://www.autohotkey.com/) 2.0, free software under
