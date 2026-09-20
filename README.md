@@ -11,6 +11,8 @@ For Windows 10 and 11. English → Persian by default, or any of 18 other langua
 Arabic, Urdu, Turkish, Spanish, French, German, Italian, Portuguese, Dutch, Polish, Russian, Ukrainian,
 Hindi, Indonesian, Vietnamese, Chinese, Japanese and Korean.
 
+![A word looked up on a web page: meaning, pronunciation, the meaning that fits the sentence, and the translation](https://raw.githubusercontent.com/HamedPhixer/TLDR-Vocab/main/docs/images/word.png)
+
 ## Download
 
 From the [latest release](https://github.com/HamedPhixer/TLDR-Vocab/releases/latest):
@@ -32,6 +34,8 @@ checks every file against the check sums published with it, closes TLDR Vocab, s
 it again — about ten seconds. If anything goes wrong on the way, nothing is changed; if the new version
 does not start, the old one is put back by itself. The version you had is kept in the **previous version**
 folder: to go back, copy what is in it over the TLDR Vocab folder.
+
+![The update window: what is new, with Update now, Download page and Not now](https://raw.githubusercontent.com/HamedPhixer/TLDR-Vocab/main/docs/images/update.png)
 
 **By hand**, if you prefer:
 
@@ -56,12 +60,28 @@ All of them can be changed — or switched off — in Settings.
 | **Win + F7** | Your saved word list. |
 | **Esc** | Closes the card. A click outside it does too. |
 
+**Translate a passage** — the sentences around the one you click, in plain English and in your language:
+
+![The Translate card: the sentences taken, the same thing in simple English, and the translation](https://raw.githubusercontent.com/HamedPhixer/TLDR-Vocab/main/docs/images/translate.png)
+
+**Summary** — a whole block of text, shortened in both languages:
+
+![The Summary card: a paragraph in simple English, its translation, and what the screen reading actually read](https://raw.githubusercontent.com/HamedPhixer/TLDR-Vocab/main/docs/images/summary.png)
+
 The selection and the box pick the card by length: a few words get the dictionary, a sentence or so
 gets Translate, anything longer gets Summary. Wrong guess? Click **TRANSLATE | SUMMARY** at the top
 of the card to redo the same text the other way.
 
 **Pin a card** to keep it: the pin at its top right leaves it on screen, where you can drag it anywhere, and
 its × closes it. The next lookup opens a new card beside it, so you can keep several at once.
+
+## Your word list
+
+**+ save** on any card keeps the word, the meaning you picked, its translation and the sentence you found
+it in. **Win + F7** opens the list: search it, click a word to see everything kept for it, or type a word
+and press Enter to look it up online. The gear opens Settings.
+
+![The word list: saved words with their translations, and everything kept for the one picked](https://raw.githubusercontent.com/HamedPhixer/TLDR-Vocab/main/docs/images/wordlist.png)
 
 ## Gemini (optional, free)
 
@@ -74,6 +94,8 @@ found it.
 3. Paste it into the Key box and click **test**
 
 Your key stays in `Vocab.ini` on your PC. It is never part of this repository or its downloads.
+
+![Settings: the language, the Gemini key, the proxy, and every key shown with a change button](https://raw.githubusercontent.com/HamedPhixer/TLDR-Vocab/main/docs/images/settings.png)
 
 ## Where the answers come from
 
