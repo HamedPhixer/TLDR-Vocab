@@ -24,28 +24,6 @@ From the [latest release](https://github.com/HamedPhixer/TLDR-Vocab/releases/lat
 
 A dictionary icon appears in the tray. Right-click it for Settings — or click the gear in the word list.
 
-## Updating
-
-Your words, settings and saved lookups are never part of a download, so updating never touches them.
-
-**With one click.** When a new version is out, a notice says so (once a day; Settings → General can switch
-that off, or check now). Click it: a window shows what is new. **Update now** downloads the new version,
-checks every file against the check sums published with it, closes TLDR Vocab, swaps the files and starts
-it again — about ten seconds. If anything goes wrong on the way, nothing is changed; if the new version
-does not start, the old one is put back by itself. The version you had is kept in the **previous version**
-folder: to go back, copy what is in it over the TLDR Vocab folder.
-
-![The update window: what is new, with Update now, Download page and Not now](https://raw.githubusercontent.com/HamedPhixer/TLDR-Vocab/main/docs/images/update.png)
-
-**By hand**, if you prefer:
-
-1. Right-click the tray icon → **Exit**.
-2. Download the new zip (the same kind you have — portable or not) and unzip it **into the same folder**.
-   When Windows asks, choose **Replace the files in the destination**.
-3. Start TLDR Vocab again.
-
-Updating with one click works from 1.2.0 on. From an older version, update by hand once.
-
 ## The keys
 
 All of them can be changed — or switched off — in Settings.
@@ -174,6 +152,28 @@ If you move the TLDR Vocab folder, make the task again: it points at the old pla
 - **Translate** takes text by its punctuation. A line without any runs on into the next one; for an
   exact piece of text, draw a box.
 - The screen reading is English only.
+
+## Updating
+
+Your words, settings and saved lookups are never part of a download, so updating never touches them.
+
+**With one click.** When a new version is out, a notice says so (once a day; Settings → General can switch
+that off, or check now). Click it: a window shows what is new. **Update now** downloads the new version,
+checks every file against the check sums published with it, closes TLDR Vocab, swaps the files and starts
+it again — about ten seconds. If anything goes wrong on the way, nothing is changed; if the new version
+does not start, the old one is put back by itself. The version you had is kept in the **previous version**
+folder: to go back, copy what is in it over the TLDR Vocab folder.
+
+![The update window: what is new, with Update now, Download page and Not now](https://raw.githubusercontent.com/HamedPhixer/TLDR-Vocab/main/docs/images/update.png)
+
+**By hand**, if you prefer:
+
+1. Right-click the tray icon → **Exit**.
+2. Download the new zip (the same kind you have — portable or not) and unzip it **into the same folder**.
+   When Windows asks, choose **Replace the files in the destination**.
+3. Start TLDR Vocab again.
+
+Updating with one click works from 1.2.0 on. From an older version, update by hand once.
 
 ## For developers
 
