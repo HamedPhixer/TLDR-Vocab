@@ -140,6 +140,9 @@ news := Update.Newest(list, "1.1.0-beta.2")
 Check("update: the notes and files come along", news["notes"] " | " news["assets"][1]["name"] " " news["assets"][1]["size"]
     , "## New`n- **One** thing | manifest.json 10")
 Check("update: the notes as plain text", Install.NotesText(news["notes"]), "NEW`r`n" Chr(0x2022) " One thing")
+Check("update: a folded section reads as a heading"
+    , Install.NotesText("Intro.`n`n<details>`n<summary><b>New</b> (2)</summary>`n`n- one`n- two`n`n</details>")
+    , "Intro.`r`n`r`nNEW (2)`r`n`r`n" Chr(0x2022) " one`r`n" Chr(0x2022) " two")
 Check("update: wrapped note lines joined", Install.NotesText("- one`n  two`n  - three"), Chr(0x2022) " one two`r`n  " Chr(0x2022) " three")
 
 ;--- updating: what may be written ---------------------------------------------

@@ -10,7 +10,6 @@ Each version's notes. The release on GitHub is built from the section with its n
   why: "3.8 Flash is out of today's free requests (until 10:30), trying 3.7 Flash", "is busy for a
   minute", "could not connect, asked again". A busy model no longer looks like a broken connection. When
   all is well it says only "asking Gemini…", as before.
-
 - **A Gemini model that has used up its free requests for the day is left alone until they start again**
   (midnight in California), instead of being asked first on every lookup. The newest Flash allows only 20
   a day on a free key. When every model is out, the card says until when. A model that is only busy, or
@@ -22,7 +21,8 @@ Each version's notes. The release on GitHub is built from the section with its n
 
 Everything since 1.0.0 — tried out first in the 1.1.0 and 1.2.0 test versions — plus a few last fixes.
 
-### New
+<details>
+<summary><b>New</b> (7)</summary>
 
 - **Update with one click.** When a new version is out, a notice opens a window with what is new and
   **Update now**. TLDR Vocab downloads it, checks every file, swaps them and starts again — or puts the
@@ -40,7 +40,10 @@ Everything since 1.0.0 — tried out first in the 1.1.0 and 1.2.0 test versions 
   cannot be read, the newest backup is loaded by itself.
 - **Start with Windows:** the README explains how.
 
-### Changed
+</details>
+
+<details>
+<summary><b>Changed</b> (5)</summary>
 
 - **Gemini waits less.** A model that is overloaded or out of free quota is skipped for a minute, instead
   of being asked first — and waited on — every time. If no answer comes within 10 seconds (a normal one
@@ -54,7 +57,10 @@ Everything since 1.0.0 — tried out first in the 1.1.0 and 1.2.0 test versions 
 - The update check runs 2 seconds after start instead of 8, and still once a day when TLDR Vocab runs
   for days without a restart. A day it could not reach GitHub is tried again an hour later.
 
-### Fixed
+</details>
+
+<details>
+<summary><b>Fixed</b> (4)</summary>
 
 - The sentence a looked-up word came with could lose its ends when its line was wider than the part of
   the screen read for the word — and Gemini then explained the word from half a sentence. Such a sentence
@@ -65,6 +71,8 @@ Everything since 1.0.0 — tried out first in the 1.1.0 and 1.2.0 test versions 
   read the small number as part of the word — no longer stops the lookup.
 - A connection that fails on the first try — it happens on some networks — no longer means "Could not
   reach GitHub".
+
+</details>
 
 ## 1.2.0-beta.3 — 2026-09-20
 

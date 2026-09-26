@@ -125,6 +125,11 @@ class Install {
         t := StrReplace(StrReplace(md, "`r"), "**")
         t := RegExReplace(t, "\n[ \t]+(?![-*\s])", " ")         ; a wrapped line joins the one before
         t := RegExReplace(t, "m)^#+\s*(.*)$", "$U1")
+        ; a section GitHub shows folded: its summary is its heading, the tags go
+        t := RegExReplace(t, "im)^[ \t]*<summary>(.*?)</summary>[ \t]*$", "<h>$1")
+        t := RegExReplace(t, "i)</?(details|b|strong)>")
+        t := RegExReplace(t, "m)^<h>(.*)$", "$U1")
+        t := RegExReplace(t, "\n{3,}", "`n`n")
         t := RegExReplace(t, "m)^(\s*)[-*] ", "$1" Chr(0x2022) " ")
         t := RegExReplace(t, "\[([^\]]+)\]\([^)]+\)", "$1")
         t := StrReplace(t, "``")

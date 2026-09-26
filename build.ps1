@@ -39,6 +39,9 @@ if ($start -lt 0) { throw "CHANGELOG.md has no section for $version" }
 $end = $log.Count
 for ($i = $start + 1; $i -lt $log.Count; $i++) { if ($log[$i] -match "^## ") { $end = $i; break } }
 $notes = ($log[($start + 1)..($end - 1)] -join "`n").Trim()
+# GitHub shows every line break in release notes as a break, so a line
+# wrapped in CHANGELOG.md joins the one before it
+$notes = $notes -replace '\n[ \t]+(?=\S)(?![-*] )', ' '
 
 $exe = Join-Path $AhkDir "AutoHotkey64.exe"
 $lic = @("license.txt", "AutoHotkey license.txt") | % { Join-Path $AhkDir $_ } | ? { Test-Path $_ } | Select-Object -First 1
