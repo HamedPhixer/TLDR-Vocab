@@ -46,30 +46,20 @@ LookupSelection(*) {
     ; same split the click keys make.
     n := CountWords(text)
     mode := (n <= 4) ? "word" : (n <= SentenceMaxWords()) ? "sentence" : "paragraph"
-    StartLookup((mode != "word" || InStr(text, " ")) ? text : CleanWord(text), "", Popup
-        , {x: mx, y: my - 10, w: 1, h: 20}, false, mode)
+    if (mode = "word" && (text := CleanWord(text)) = "") {
+        Popup.Message("No word in the selection", mx, my)
+        return
+    }
+    StartLookup(text, "", Popup, {x: mx, y: my - 10, w: 1, h: 20}, false, mode)
 }
 
 ; OCR a band around the pointer and take the word it is on - or nearly on.
 ; The band is centred on the pointer both ways, and enlarged before reading.
-;
-; HOW MUCH TO ENLARGE, AND WHY IT MATTERS
-; Windows' reader has a sweet spot. Enlarging helps small text and ruins big
-; text: a 100 px subtitle doubled comes out over 200 px tall and reads as
-; nothing at all, or - worse - as pieces of itself ("plu", "lung", "e"). So
-; the fallbacks zoom OUT before they zoom in:
-;
-;   1.5x on a wide band    ordinary text and subtitles, measured good from
-;                          8 px UI labels up to 100 px subtitles
-;   1x on a taller band    text bigger still, and a second opinion
-;   3x on a small band     genuinely tiny print, last because zooming in is
-;                          what breaks large text
-;
-; Measured on rendered text at 8, 12, 14, 37, 66 and 103 px: the first band
-; alone reads every one of them, from any pointer position on the word.
+; Which bands, and how much to enlarge each, is the OCR engine's own measured
+; sweet spot - Windows' reader's is explained with WinOcr.WordPasses.
 WordAtPoint(mx, my) {
     vx := SysGet(76), vy := SysGet(77), vw := SysGet(78), vh := SysGet(79)
-    passes := [{w: 800, h: 220, s: 1.5}, {w: 900, h: 300, s: 1}, {w: 480, h: 90, s: 3}]
+    passes := Ocr.Engine.WordPasses
     for i, pass in passes {
         rx := Max(vx, Min(mx - pass.w // 2, vx + vw - pass.w))
         ry := Max(vy, Min(my - pass.h // 2, vy + vh - pass.h))
@@ -114,8 +104,18 @@ PickWord(lines, px, py, edge := "") {
     return {word: word, context: ctx ? ctx.text : "", x: w.x, y: w.y, w: w.w, h: w.h}
 }
 
+; A word or short phrase as it should be looked up: no quotes, brackets or
+; Markdown marks around it ("__delaunay triangulation__"), no footnote stuck
+; to its end - "abridged[119]" copied from Wikipedia, or "abridged119" when
+; the screen read the small raised number as part of the word - and no "'s".
+; A letter-and-number name keeps its digits unless the letters make a real
+; word's length: "mp3" and "b12" stay, four letters or more lose them.
 CleanWord(t) {
     t := StrReplace(StrReplace(t, Chr(0x2019), "'"), Chr(0x2018), "'")
+    t := RegExReplace(t, "(\[\d{1,3}\])+$")
     t := RegExReplace(t, "^[^A-Za-z0-9]+|[^A-Za-z0-9]+$")
+    if InStr(t, " ")
+        return t
+    t := RegExReplace(t, "^([A-Za-z]{4,})\d{1,3}$", "$1")
     return RegExReplace(t, "i)'s$")
 }

@@ -3,6 +3,7 @@
 Vocab.ini
 words.json
 words.unreadable-*.json
+backups/
 *.tmp
 previous version/
 cache/
@@ -12,6 +13,7 @@ errors.log
 tests/results-*.txt
 tests/Vocab.ini
 tests/cache/
+tests/backups/
 tests/errors.log
 tools/*.bmp
 tools/ocrdebug.txt

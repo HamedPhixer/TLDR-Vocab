@@ -146,21 +146,20 @@ class Box {
         mode := (n <= 4) ? "word" : (n <= SentenceMaxWords()) ? "sentence" : "paragraph"
         if (mode != "paragraph")
             text := RegExReplace(text, "\s+", " ")
+        if (mode = "word" && (text := CleanWord(text)) = "") {
+            Popup.Message("No word in the box", x, y + h)
+            return
+        }
         ; the popup keeps clear of the box if it can - see Popup.Plan
-        StartLookup((mode != "word" || InStr(text, " ")) ? text : CleanWord(text), "", Popup
-            , {x: x, y: y, w: w, h: h}, mode = "word", mode)
+        StartLookup(text, "", Popup, {x: x, y: y, w: w, h: h}, mode = "word", mode)
     }
 
     ; The text in the box, top to bottom. How much to enlarge follows the box's
     ; height - a box drawn around one line is only a little taller than its
-    ; text - for the reason WordAtPoint explains: enlarging helps small text
-    ; and ruins big text. The first reading that finds anything is used.
+    ; text - for the reason WinOcr.WordPasses explains: enlarging helps small
+    ; text and ruins big text. The first reading that finds anything is used.
     static TextIn(x, y, w, h) {
-        Ocr.Init()
-        scales := (h < 60) ? [2, 3, 1] : (h < 200) ? [1.5, 1, 2.5] : [1, 1.5]
-        for s in scales {
-            if Ocr.maxDim                       ; the reader refuses anything bigger
-                s := Min(s, Ocr.maxDim / Max(w, h))
+        for s in Ocr.Engine.BoxScales(h) {
             ; everything in the box, top to bottom; a paragraph gap is kept as
             ; a line break for the Summary card (see Lines.ahk)
             rows := PageRows(Ocr.Screen(x, y, w, h, s))

@@ -332,7 +332,7 @@ RenderLookup(g, W, st, owner) {
             f.Text(Chr(0x201C) ex Chr(0x201D), CMuted, "s8 Norm Italic", "", 5)
         }
         if !lk.ai.done
-            f.Text("asking Gemini" Chr(0x2026), CDim, "s9 Norm Italic")
+            f.Text(lk.ai.Waiting, CDim, "s9 Norm Italic")
         else if lk.ai.data {
             a := lk.ai.data
             SenseRow(f, "ai", Chosen(st) = "ai", a["meaning"] ((a["pos"] != "") ? "  (" a["pos"] ")" : ""), pick)

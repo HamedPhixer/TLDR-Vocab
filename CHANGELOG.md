@@ -2,6 +2,50 @@
 
 Each version's notes. The release on GitHub is built from the section with its number.
 
+## 1.2.0 — 2026-09-26
+
+Everything since 1.0.0 — tried out first in the 1.1.0 and 1.2.0 test versions — plus a few last fixes.
+
+### New
+
+- **Update with one click.** When a new version is out, a notice opens a window with what is new and
+  **Update now**. TLDR Vocab downloads it, checks every file, swaps them and starts again — or puts the
+  old version back if anything goes wrong. Your words, settings and saved lookups are never touched.
+  From 1.0.0, this one update is by hand: unzip it over your folder.
+- **Checks for updates** once a day; Settings → General can switch it off.
+- **Translate into other languages:** Persian (still the default), Arabic, Urdu, Turkish, Spanish, French,
+  German, Italian, Portuguese, Dutch, Polish, Russian, Ukrainian, Hindi, Indonesian, Vietnamese, Chinese,
+  Japanese or Korean — Settings → Translation.
+- **Pin a card** to keep it on screen and drag it anywhere; the next lookup opens a new card beside it.
+- **Translate a passage** (was "translate a sentence"): the sentences around the one you click, or only
+  that one — Settings → Translation.
+- **A daily backup of your words.** Before the first word you save each day, `words.json` is copied into
+  the new `backups` folder. The last 10 are kept, plus one a month for 6 months. If `words.json` ever
+  cannot be read, the newest backup is loaded by itself.
+- **Start with Windows:** the README explains how.
+
+### Changed
+
+- **Gemini answers when the connection stalls.** If no answer comes within 6 seconds, the question is
+  sent once more and the first answer is used — what pressing "look up again" used to do by hand. A
+  connection that fails outright is tried again before the next model, and after 30 seconds the card
+  says so instead of waiting on.
+- Gemini thinks a little on every model (2.5 models did not think at all), so the meaning fits the
+  sentence better.
+- Settings scrolls, and can be made shorter or taller.
+- The word list's "lock" is now a gear that opens Settings; the speaker button is always there.
+- The update check runs 2 seconds after start instead of 8, and still once a day when TLDR Vocab runs
+  for days without a restart. A day it could not reach GitHub is tried again an hour later.
+
+### Fixed
+
+- A selected phrase is looked up without the marks around it: `__delaunay triangulation__` from Markdown
+  now finds "delaunay triangulation".
+- A footnote stuck to a word — "abridged[119]" copied from Wikipedia, or "abridged119" when the screen
+  read the small number as part of the word — no longer stops the lookup.
+- A connection that fails on the first try — it happens on some networks — no longer means "Could not
+  reach GitHub".
+
 ## 1.2.0-beta.3 — 2026-09-20
 
 ### Fixed

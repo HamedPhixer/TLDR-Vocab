@@ -8,7 +8,8 @@
 ;   Config     what is set in the script: version, icon, colours, sizes
 ;   Language   the language translations go into
 ;   Lookup     the sources: dictionaries, translators, Gemini, and the cache
-;   Ocr        Windows' OCR, and reading a piece of the screen
+;   OcrWindows Windows' own OCR - the engine Ocr uses
+;   Ocr        reading a piece of the screen, whichever engine reads it
 ;   Lines      turning OCR output into lines of text on a page
 ;   Speak      hearing the word
 ;   App        the ini, the icon, the tray, starting a lookup
@@ -34,6 +35,7 @@
 #Include %A_LineFile%\..\Config.ahk
 #Include %A_LineFile%\..\Language.ahk
 #Include %A_LineFile%\..\Lookup.ahk
+#Include %A_LineFile%\..\OcrWindows.ahk
 #Include %A_LineFile%\..\Ocr.ahk
 #Include %A_LineFile%\..\Lines.ahk
 #Include %A_LineFile%\..\Speak.ahk

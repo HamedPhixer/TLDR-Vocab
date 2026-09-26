@@ -97,6 +97,7 @@ Behind a VPN, the *Proxy* setting follows Windows' own proxy by default. It take
 |---|---|
 | `Vocab.ini` | your settings and Gemini key |
 | `words.json` | the words you save — plain, readable JSON |
+| `backups\` | a copy of `words.json` from each day you saved words: the last 10, plus one a month for 6 months. To go back, quit TLDR Vocab and copy one over `words.json` |
 | `cache\` | definitions and pronunciations, so a repeat is instant |
 | `errors.log` | only if something goes wrong |
 | `previous version\` | after an update: the version before it |

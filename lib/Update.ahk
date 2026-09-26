@@ -1,7 +1,7 @@
 ;================================================================================
 ; Update.ahk - is there a newer version?
 ;================================================================================
-; Once a day, a few seconds after start, the releases on GitHub are asked for
+; Once a day, two seconds after start, the releases on GitHub are asked for
 ; (one small request to its public API, no account, through the same proxy
 ; setting as every lookup). If one is newer than VocabVersion, a tray notice
 ; says so, and clicking it opens the update window (Install.ahk): what is
@@ -16,21 +16,30 @@
 ; and has "check now"; so does the tray menu. A check by hand always answers,
 ; "up to date" included; the daily one only speaks when there is news, and
 ; says nothing at all when GitHub cannot be reached.
+;
+; "Once a day" means once per calendar day that GitHub answered, not once per
+; start: Vocab usually starts with Windows and can run for a week, so Daily()
+; is asked again every hour and does nothing unless the date has changed. A
+; day whose check could not reach GitHub is not marked done, so the next hour
+; tries again.
 ;================================================================================
 #Requires AutoHotkey v2.0
 
 class Update {
     static req := "", poller := "", manual := false, onDone := "", found := "", retried := false
 
-    ; at start: once a day, unless switched off
+    static Start() {
+        SetTimer(() => Update.Daily(), -2000)
+        SetTimer(() => Update.Daily(), 3600000)
+    }
+
+    ; once a day, unless switched off
     static Daily() {
         ini := VocabIni()
         if (IniRead(ini, "General", "CheckUpdates", 1) != 1)
             return
-        today := FormatTime(, "yyyyMMdd")
-        if (IniRead(ini, "General", "LastUpdateCheck", "") = today)
+        if (IniRead(ini, "General", "LastUpdateCheck", "") = FormatTime(, "yyyyMMdd"))
             return
-        try IniWrite(today, ini, "General", "LastUpdateCheck")
         Update.Check(false)
     }
 
@@ -67,8 +76,10 @@ class Update {
         }
         Update.req := ""
         news := ""
-        if r.Ok
+        if r.Ok {
+            try IniWrite(FormatTime(, "yyyyMMdd"), VocabIni(), "General", "LastUpdateCheck")
             try news := Update.Newest(Json.Parse(r.text), VocabVersion)
+        }
         if (!r.Ok || news = "") {
             ok := r.Ok && news = ""
             text := ok ? "You have the newest version, " VocabVersion "."

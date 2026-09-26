@@ -15,8 +15,8 @@
 ;   back from previous version\, new ones are deleted - and the reason is
 ;   returned. "" = done.
 ;
-; What is never touched, whatever a list says: Vocab.ini, words.json, cache\,
-; errors.log - your settings, your words, what was looked up - and anything
+; What is never touched, whatever a list says: Vocab.ini, words.json, backups\,
+; cache\, errors.log - your settings, your words, what was looked up - and anything
 ; outside the app's folder. Swap.SafeRel turns such a path down, and the whole
 ; update with it.
 ;
@@ -39,7 +39,7 @@ class Swap {
             if (part = "" || part = "." || part = ".." || RegExMatch(part, "[. ]$"))
                 return false
         first := StrSplit(rel, "\")[1]
-        for mine in ["Vocab.ini", "words.json", "errors.log", "cache", Swap.BackupName, ".git"]
+        for mine in ["Vocab.ini", "words.json", "errors.log", "cache", "backups", Swap.BackupName, ".git"]
             if (first = mine)
                 return false
         return !RegExMatch(rel, "i)^words\.unreadable-")

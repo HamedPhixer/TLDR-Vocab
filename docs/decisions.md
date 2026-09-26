@@ -23,6 +23,18 @@ is read at 1× only to find the text, and that text is read again at 1.5× for
 the words. Summary got the same second read later: small print read at 1×
 came out noticeably worse.
 
+**The engine sits behind one door (1.2.0).** `lib\Ocr.ahk` is all the app
+calls; Windows' reader is one engine behind it (`WinOcr`, `lib\OcrWindows.ahk`).
+How much to enlarge was spread over four files as bare numbers, all measured
+for Windows' reader; they moved into the engine (`WordPasses`, `BlockScale`,
+`BoxScales`), because a different reader has a different sweet spot. The
+engine's size limit is handled inside `Ocr.Screen` too: a rectangle too big
+for it is read smaller, and the boxes are scaled back to the size the caller
+asked for. So a better engine later is one new file and one line
+(`Ocr.Engine`) — plus measuring its passes with `tools\OcrDebug.ahk` and the
+screen tests. Windows' own limit on this PC is 10000 px, so today it never
+comes up.
+
 ## What Translate takes
 
 This went through five versions; the last one is the rule the user asked for.
@@ -70,6 +82,30 @@ at `:` or `;` left Gemini half a sentence of context.
   not decide the models until a restart.
 - **The key test** asks for the model list, not a generation, so it costs none
   of the free quota.
+- **Waiting (1.2.0).** Sometimes "asking Gemini…" sat there until the 15 s
+  timeout, and pressing "look up again" answered at once — the mark of a
+  connection that stalled (common behind a VPN or proxy), not of a slow
+  model. Now, after 6 s with no answer, one more copy of the request goes out
+  and the first answer wins (hedging — the usual cure for a slow tail of
+  requests). A request that could not connect at all is sent again once, a
+  second later, before the next model; and everything together stops at
+  30 s with "look up again". The first lookup after start also had to fetch
+  the model list before it could ask anything; the list is now fetched 3 s
+  after start.
+- **Thinking stays on, but low** (the user's choice): 3.x models get
+  `thinkingLevel: low`; 2.5 models got `thinkingBudget: 0` — none at all —
+  and now get 512, the least 2.5 Flash-Lite accepts.
+
+## Your words
+
+- **A backup a day (1.2.0).** `words.json` was always written through a
+  temporary file, so a crash mid-save never broke it — but one bad save or a
+  wrong delete had no way back. Before the first save of each day the file is
+  copied to `backups\words-YYYY-MM-DD.json`. Kept: the newest 10, and the
+  oldest of each of the last 6 months, so a mistake noticed months later can
+  still be undone; 180 words is about 0.5 MB a copy. A copy per save was
+  rejected: many files for little gain. An unreadable `words.json` is set
+  aside, never overwritten, and the newest backup that reads is loaded.
 
 ## Hearing words
 

@@ -55,17 +55,17 @@ LookupSentenceUnderMouse(*) {
 ; Two reads. The first is the whole monitor at its own size, only to find the
 ; block: a strip around the pointer cut the ends off any line wider than the
 ; strip, which on a 1920 or 2560 px screen is most lines of an article. The
-; second is just that block, enlarged 1.5x - what reads ordinary text best
-; (see WordAtPoint) - for the words themselves; the same sentences are then
+; second is just that block, enlarged by the engine's BlockScale (1.5x for
+; Windows' reader) for the words themselves; the same sentences are then
 ; taken from it. Small print the first read misses gets the old strip.
 SentenceAtPoint(mx, my) {
     m := MonitorRectAt(mx, my)
     lines := Ocr.Screen(m[1], m[2], m[3], m[4], 1)
     if (hit := BlockAt(lines, mx - m[1], my - m[2])) {
         found := {text: hit.text, x: m[1] + hit.x, y: m[2] + hit.y, w: hit.w, h: hit.h}
-        pad := 6, s := 1.5
+        pad := 6, s := Ocr.Engine.BlockScale
         rx := m[1] + hit.bx - pad, ry := m[2] + hit.by - pad, rw := hit.bw + pad * 2, rh := hit.bh + pad * 2
-        if (Max(rw, rh) * s <= Ocr.maxDim) {
+        if (s <= Ocr.MaxScale(rw, rh)) {
             lines := Ocr.Screen(rx, ry, rw, rh, s)
             if (again := BlockAt(lines, (mx - rx) * s, (my - ry) * s))
                 found.text := again.text
@@ -73,7 +73,7 @@ SentenceAtPoint(mx, my) {
         return found
     }
     vx := SysGet(76), vy := SysGet(77), vw := SysGet(78), vh := SysGet(79)
-    w := 1000, h := 320, s := 1.5
+    w := 1000, h := 320, s := Ocr.Engine.BlockScale
     rx := Max(vx, Min(mx - w // 2, vx + vw - w))
     ry := Max(vy, Min(my - h // 2, vy + vh - h))
     lines := Ocr.Screen(rx, ry, w, h, s)
@@ -258,7 +258,7 @@ RenderSentence(g, W, st, owner) {
     if (!lk || !lk.ai.enabled)
         NoKeyLine(f, lk)
     else if !lk.ai.done
-        f.Text("asking Gemini" Chr(0x2026), CDim, "s9 Norm Italic")
+        f.Text(lk.ai.Waiting, CDim, "s9 Norm Italic")
     else if (ai && Dig(ai, "simple") != "")
         f.Text(ai["simple"], CText, "s10 Norm")
     else if KeyTrouble(lk)

@@ -7,7 +7,7 @@
 ; the notices and the update check. The files keep the short name Vocab.
 global AppName := "TLDR Vocab"
 global RepoUrl := "https://github.com/HamedPhixer/TLDR-Vocab"     ; the README and the releases
-global VocabVersion := "1.2.0-beta.3"      ; MAJOR.MINOR.PATCH - a dash makes it a test version
+global VocabVersion := "1.2.0"      ; MAJOR.MINOR.PATCH - a dash makes it a test version
 
 ; The Gemini key, the proxy, the sound and the keys are set in the settings
 ; window (tray menu > Settings, see Settings.ahk), which keeps them in

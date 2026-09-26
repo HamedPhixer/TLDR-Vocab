@@ -165,6 +165,14 @@ class Http {
         return ""
     }
 
+    ; gives up on a request still waiting - its answer is no longer wanted
+    Abort() {
+        if this.done
+            return
+        try this.req.Abort()
+        this.req := "", this.err := "cancelled", this.done := true
+    }
+
     Ok  => (this.err = "" && this.status >= 200 && this.status < 300)
     Why => (this.err != "") ? this.err : "HTTP " this.status
 
@@ -299,13 +307,18 @@ class Lookup {
 
 ;--------------------------------------------------------------------------------
 ; A track works through a queue of steps, one request at a time. Each step is
-; {name, url, parse, opts?}; parse gets the finished Http and returns the
-; answer, or "" for "this source had nothing".
+; {name, url, parse, opts?, hedge?, after?}; parse gets the finished Http and
+; returns the answer, or "" for "this source had nothing".
+;   hedge   ms: with no answer by then, one more copy of the request goes out
+;           and whichever answers first is taken (see Answered)
+;   after   A_TickCount before which the step is not sent - a short pause
+;           before trying again
 ;--------------------------------------------------------------------------------
 class Track {
     __New(lk) {
         this.lk := lk, this.done := false, this.data := "", this.source := ""
         this.tried := [], this.note := "", this.steps := [], this.req := "", this.cur := ""
+        this.twin := "", this.sent := 0, this.again := false
         this.cached := false, this.cacheKind := "", this.enabled := true
         this.Start()
     }
@@ -329,6 +342,8 @@ class Track {
         if !this.req {
             if !this.steps.Length
                 return this.Finish()
+            if (IsObject(this.steps[1]) && this.steps[1].HasProp("after") && A_TickCount < this.steps[1].after)
+                return false
             this.cur := this.steps.RemoveAt(1)
             ; Every step carries an address. One that somehow does not is
             ; logged - with what it did hold - and skipped, never a dialog
@@ -344,11 +359,20 @@ class Track {
                 return false
             }
             this.req := Http(this.cur.url, this.cur.HasProp("opts") ? this.cur.opts : "")
+            this.twin := "", this.sent := A_TickCount
         }
-        if !this.req.Poll()
-            return false
-        r := this.req, s := this.cur
-        this.req := ""
+        ; A request that hangs is far more often a stuck connection than a
+        ; slow server - pressing "look up again" used to be the cure, and a
+        ; second copy is that cure without the press.
+        hedged := false
+        if (!this.twin && this.cur.HasProp("hedge") && A_TickCount - this.sent >= this.cur.hedge) {
+            this.twin := Http(this.cur.url, this.cur.HasProp("opts") ? this.cur.opts : "")
+            this.again := hedged := true
+        }
+        if !(r := this.Answered())
+            return hedged                   ; the card says it asked again
+        s := this.cur
+        this.req := "", this.twin := ""
         result := ""
         if r.Ok {
             try result := s.parse.Call(r)
@@ -357,6 +381,23 @@ class Track {
         }
         this.tried.Push(s.name (result ? "" : " - " ((r.Ok && r.err = "") ? "no entry" : r.Why)))
         return this.Got(s, r, result)
+    }
+
+    ; The finished request to use, or "" while waiting. With two copies out:
+    ; the first good answer, the other one dropped; a failure only once both
+    ; have failed - then the one the server answered, which says more.
+    Answered() {
+        a := this.req.Poll()
+        if !this.twin
+            return a ? this.req : ""
+        b := this.twin.Poll()
+        if (a && this.req.Ok)
+            return (this.twin.Abort(), this.req)
+        if (b && this.twin.Ok)
+            return (this.req.Abort(), this.twin)
+        if (a && b)
+            return this.req.status ? this.req : this.twin
+        return ""
     }
 
     Got(s, r, result) {
@@ -824,9 +865,22 @@ class FaTrack extends Track {
 ; guess serves that one lookup and the list is asked for again next time;
 ; kept, it would pin every later lookup to the guess until a restart.
 ;
-; Thinking is turned down - it is a lookup, not a puzzle, and thinking costs
-; seconds. 2.5 models take thinkingBudget, 3.x take thinkingLevel; if a model
-; rejects either, the request is repeated without it.
+; Thinking is kept, but low - enough to read the sentence right, not so much
+; that a lookup waits on it. 2.5 models take thinkingBudget (512, the least
+; Flash-Lite accepts), 3.x take thinkingLevel; if a model rejects either, the
+; request is repeated without it.
+;
+; WAITING. An answer normally takes a few seconds. A connection that stalls -
+; common behind a VPN or proxy - used to leave "asking Gemini..." up for the
+; full 15 s timeout, then move to the next model; pressing "look up again"
+; was quicker. Now:
+;   - after Hedge ms with no answer, one more copy of the request is sent and
+;     the first answer is taken (Track.Answered). A slow answer thus costs one
+;     extra request from the free quota; a quick one costs nothing extra.
+;   - a request that could not connect at all is sent again once, a second
+;     later, before the next model is tried
+;   - all of it, every model and every retry, stops at Budget ms, with a note
+;     that says to look up again
 ;--------------------------------------------------------------------------------
 class AiTrack extends Track {
     static chain := "", good := "", keyBad := ""
@@ -834,10 +888,11 @@ class AiTrack extends Track {
     ; the -latest aliases follow whatever Flash is current, so they never go
     ; out of date the way named models do (docs\decisions.md)
     static Guess := ["gemini-flash-latest", "gemini-flash-lite-latest"]
+    static Hedge := 6000, Budget := 30000
 
     Start() {
         this.key := GeminiKey()
-        this.noThink := false
+        this.noThink := false, this.t0 := A_TickCount, this.retried := Map()
         if (this.key = "") {
             this.enabled := false, this.done := true, this.note := "no key"
             return
@@ -848,6 +903,28 @@ class AiTrack extends Track {
         }
         this.models := AiTrack.Models()
         this.steps := this.models.Length ? [this.GenStep(this.models[1])] : [this.ListStep()]
+    }
+
+    Waiting => "asking Gemini" Chr(0x2026) (this.again ? "  slow connection, asked again" : "")
+    Left => AiTrack.Budget - (A_TickCount - this.t0)
+
+    ; At start, a few seconds in: the model list, so the first lookup goes
+    ; straight to a model - and a connection that some networks drop on a
+    ; fresh start is spent here rather than on a lookup. Failing is fine; the
+    ; lookup asks for the list itself then.
+    static Warm() {
+        key := GeminiKey()
+        if (key = "" || AiTrack.chain)
+            return
+        req := Http(AiTrack.Api "models?pageSize=1000", {timeout: 8000, headers: Map("x-goog-api-key", key)})
+        poll() {
+            if !req.Poll()
+                return
+            SetTimer(poll, 0)
+            if (req.Ok && !AiTrack.chain)
+                try AiTrack.chain := AiTrack.PickModels(req)
+        }
+        SetTimer(poll, 200)
     }
 
     static Models() {
@@ -873,11 +950,11 @@ class AiTrack extends Track {
             , parse: ObjBindMethod(AiTrack, "PickModels")}
     }
 
-    GenStep(model) {
+    GenStep(model, after := 0) {
         think := ""
         if !this.noThink {
             if RegExMatch(model, "^gemini-2\.5-flash")
-                think := Map("thinkingBudget", 0)
+                think := Map("thinkingBudget", 512)
             else if RegExMatch(model, "^gemini-([3-9]|flash)")      ; flash-latest is a 3.x
                 think := Map("thinkingLevel", "low")
         }
@@ -887,10 +964,20 @@ class AiTrack extends Track {
         body := Json.Dump(Map("contents", [Map("role", "user", "parts", [Map("text", AiTrack.Prompt(this.lk))])]
             , "generationConfig", cfg), "", true)
         return {name: "Gemini", kind: "gen", model: model, think: IsObject(think)
-            , url: AiTrack.Api "models/" model ":generateContent"
-            , opts: {method: "POST", body: body, timeout: 15000
+            , url: AiTrack.Api "models/" model ":generateContent", hedge: AiTrack.Hedge, after: after
+            , opts: {method: "POST", body: body, timeout: Max(3000, Min(20000, this.Left))
                 , headers: Map("x-goog-api-key", this.key, "Content-Type", "application/json")}
             , parse: ObjBindMethod(AiTrack, "Answer", this.lk.mode)}
+    }
+
+    ; the next request, unless the time for all of them is up
+    Next(step) {
+        if (this.Left < 3000) {
+            this.note := "no answer in " AiTrack.Budget // 1000 " s - look up again"
+            return this.Finish()
+        }
+        this.steps := [step]
+        return false
     }
 
     Got(s, r, result) {
@@ -921,15 +1008,18 @@ class AiTrack extends Track {
         }
         if (r.status = 400 && s.think && !this.noThink) {
             this.noThink := true
-            this.steps := [this.GenStep(s.model)]
-            return false
+            return this.Next(this.GenStep(s.model))
+        }
+        ; no connection at all (not a timeout, not an answer): once more, the
+        ; same model, a second later - the first try is what some networks drop
+        if (r.err != "" && r.err != "timed out" && !r.status && !this.retried.Has(s.model)) {
+            this.retried[s.model] := true, this.again := true
+            return this.Next(this.GenStep(s.model, A_TickCount + 1000))
         }
         if (r.status = 429 || r.status = 404 || r.status = 403 || r.status >= 500 || r.err != "") {
             for i, m in this.models
-                if (m = s.model && i < this.models.Length) {
-                    this.steps := [this.GenStep(this.models[i + 1])]
-                    return false
-                }
+                if (m = s.model && i < this.models.Length)
+                    return this.Next(this.GenStep(this.models[i + 1]))
         }
         this.note := (r.status = 429) ? "free quota used up for now"
                    : r.Ok ? "no usable answer"

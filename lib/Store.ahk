@@ -1,33 +1,112 @@
 ;================================================================================
 ; Store.ahk - your dictionary, words.json
 ;================================================================================
+; Every save rewrites the whole file through a temporary one (WriteFileAtomic),
+; so a crash or a full disk mid-save leaves the old file whole.
+;
+; BACKUPS - backups\words-YYYY-MM-DD.json, next to words.json. Before the
+; first save of a day, the file as it stood is copied there, so each backup is
+; the dictionary at the end of the last day it changed. Kept: the newest 10,
+; and the oldest of each of the last 6 months - a mistake noticed the same
+; week and one noticed months later can both be undone. Restoring by hand is
+; copying one of them over words.json while Vocab is closed.
+;
+; If words.json cannot be read at start, it is set aside (never overwritten)
+; and the newest backup that reads is loaded in its place.
+;================================================================================
 #Requires AutoHotkey v2.0
 
 class Store {
     static Path := A_ScriptDir "\words.json", words := []
+    static BackupDir := A_ScriptDir "\backups", backedUp := ""
+    static KeepDays := 10, KeepMonths := 6
 
     static Load() {
         if !FileExist(Store.Path)
             return
-        try {
-            w := Dig(Json.Parse(FileRead(Store.Path, "UTF-8")), "words")
-            if (w is Array) {
+        if (w := Store.Read(Store.Path)) {
+            Store.words := w
+            return
+        }
+        ; Unreadable: move it aside, so the next save cannot overwrite it
+        SplitPath(Store.Path, , &dir)
+        bad := dir "\words.unreadable-" FormatTime(, "yyyyMMdd-HHmmss") ".json"
+        try FileMove(Store.Path, bad)
+        VocabLog("words.json could not be read - set aside as " bad)
+        names := Store.Backups()
+        loop names.Length {                 ; newest first
+            name := names[names.Length - A_Index + 1]
+            if (w := Store.Read(Store.BackupDir "\" name)) {
                 Store.words := w
+                Store.Save()
+                TrayTip("words.json could not be read. It was set aside as`n" bad
+                    . "`nand the backup of " SubStr(name, 7, 10) " was loaded instead.", AppName, 2)
                 return
             }
         }
-        ; Unreadable: move it aside, so the next save cannot overwrite it
-        bad := A_ScriptDir "\words.unreadable-" FormatTime(, "yyyyMMdd-HHmmss") ".json"
-        try FileMove(Store.Path, bad)
         TrayTip("words.json could not be read, so it was set aside as`n" bad, AppName, 2)
     }
 
+    ; the words in a file, or "" when it is not a readable words file
+    static Read(path) {
+        try {
+            w := Dig(Json.Parse(FileRead(path, "UTF-8")), "words")
+            if (w is Array)
+                return w
+        }
+        return ""
+    }
+
     static Save() {
+        Store.Backup()
         try WriteFileAtomic(Store.Path, Json.Dump(Map("version", 1, "words", Store.words), "  "))
         catch as e {
             VocabLog("saving words.json failed: " e.Message)
             TrayTip("Could not save words.json:`n" e.Message, AppName, 3)
         }
+    }
+
+    ; Today's backup, once, before today's first save overwrites the file.
+    ; A failed backup is logged and the save goes ahead - the words just
+    ; chosen matter more than a copy of yesterday's.
+    static Backup() {
+        day := FormatTime(, "yyyy-MM-dd")
+        if (Store.backedUp = day)
+            return
+        dest := Store.BackupDir "\words-" day ".json"
+        try {
+            if (FileExist(Store.Path) && !FileExist(dest)) {
+                DirCreate(Store.BackupDir)
+                FileCopy(Store.Path, dest)
+            }
+            Store.backedUp := day
+            Store.Prune()
+        } catch as e
+            VocabLog("backing up words.json failed: " e.Message)
+    }
+
+    ; the backups' file names, oldest first (the dates in them sort that way)
+    static Backups() {
+        list := ""
+        loop files Store.BackupDir "\words-*.json"
+            if RegExMatch(A_LoopFileName, "^words-\d{4}-\d\d-\d\d\.json$")
+                list .= A_LoopFileName "`n"
+        return (list = "") ? [] : StrSplit(Sort(RTrim(list, "`n")), "`n")
+    }
+
+    static Prune() {
+        names := Store.Backups()
+        keep := Map(), firsts := []             ; firsts: the oldest of each month
+        for name in names
+            if (!firsts.Length || SubStr(firsts[firsts.Length], 7, 7) != SubStr(name, 7, 7))
+                firsts.Push(name)
+        loop Min(Store.KeepDays, names.Length)
+            keep[names[names.Length - A_Index + 1]] := true
+        loop Min(Store.KeepMonths, firsts.Length)
+            keep[firsts[firsts.Length - A_Index + 1]] := true
+        for name in names
+            if !keep.Has(name)
+                try FileDelete(Store.BackupDir "\" name)
     }
 
     static Find(word) {

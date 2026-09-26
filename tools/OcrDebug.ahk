@@ -1,18 +1,19 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 Persistent
+#Include %A_LineFile%\..\..\lib\OcrWindows.ahk
 #Include %A_LineFile%\..\..\lib\Ocr.ahk
 ;================================================================================
 ; OcrDebug.ahk - what Vocab actually sees when you press its hotkey
 ;================================================================================
 ; Point at the word that misreads and press  Ctrl + Alt + D.
-; It captures exactly what Vocab captures - the same two passes - and writes
-; into this script's folder:
-;   shot-<n>-pass1.bmp   the 800x160 strip around the pointer, enlarged 2x
-;   shot-<n>-pass2.bmp   the tighter 480x90 strip at 3x, which Vocab only uses
-;                        when the first pass finds nothing
+; It captures exactly what Vocab captures - the OCR engine's own passes
+; (Ocr.Engine.WordPasses; Vocab uses each only when the ones before it found
+; nothing) - and writes into this script's folder:
+;   shot-<n>-pass<i>.bmp the band around the pointer, enlarged as that pass does
 ;   ocrdebug.txt         every word each pass found, with its box, and which
 ;                        word would have been picked
+; Also the way to measure a new OCR engine's passes (see Ocr.ahk).
 ; Nothing is changed in Vocab, and nothing is sent anywhere.
 ; Ctrl + Alt + Q quits.
 ;================================================================================
@@ -29,7 +30,7 @@ Capture() {
     Shots += 1
     MouseGetPos(&mx, &my)
     Put("=========== shot " Shots "   pointer at " mx "," my "   " FormatTime(, "HH:mm:ss"))
-    for i, pass in [{w: 800, h: 160, s: 2}, {w: 480, h: 90, s: 3}] {
+    for i, pass in Ocr.Engine.WordPasses {
         rx := mx - pass.w // 2, ry := my - pass.h // 2
         hbm := Ocr.Capture(rx, ry, pass.w, pass.h, pass.s)
         SaveBmp(hbm, A_ScriptDir "\shot-" Shots "-pass" i ".bmp")

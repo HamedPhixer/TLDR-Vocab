@@ -91,6 +91,7 @@
 ;   words.json    your dictionary - plain, readable JSON. Each word already
 ;                 carries a "review" block (box, due, history) that nothing
 ;                 reads yet: it is there for a Leitner-box review mode later
+;   backups\      a copy of words.json from each day it changed - see Store.ahk
 ;   cache\        every definition and translation fetched, one file per word,
 ;                 and the pronunciations in cache\audio-us
 ;   errors.log    anything that went wrong, instead of a dialog in your face;
@@ -130,7 +131,8 @@ SetScriptIcon()
 Keys.Start()
 BuildTray()
 NoKeyNotice()
-SetTimer(() => Update.Daily(), -8000)   ; once a day, once start-up has settled
+Update.Start()                          ; once a day, from 2 s after start (Update.ahk)
+SetTimer(() => AiTrack.Warm(), -3000)   ; Gemini's model list, before the first lookup needs it
 Install.Started()                       ; just updated? (Install.ahk)
 OnMessage(0x83, DictNcCalc)             ; WM_NCCALCSIZE
 OnMessage(0x84, DictHitTest)            ; WM_NCHITTEST

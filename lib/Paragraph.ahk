@@ -52,8 +52,8 @@ LookupParagraphUnderMouse(*) {
 }
 
 ; Like Translate, two reads: the whole monitor at its own size to find the
-; block, then just the block enlarged 1.5x for the words - small print reads
-; far better that way. The second read is kept only if it found at least most
+; block, then just the block enlarged by the engine's BlockScale for the
+; words - small print reads far better that way. The second read is kept only if it found at least most
 ; of what the first did; otherwise the first stands.
 ParagraphAtPoint(mx, my) {
     m := MonitorRectAt(mx, my)
@@ -62,8 +62,8 @@ ParagraphAtPoint(mx, my) {
     if !block
         return ""
     found := {text: block.text, x: m[1] + block.x, y: m[2] + block.y, w: block.w, h: block.h}
-    s := 1.5
-    if (Max(found.w, found.h) * s <= Ocr.maxDim) {
+    s := Ocr.Engine.BlockScale
+    if (s <= Ocr.MaxScale(found.w, found.h)) {
         lines := Ocr.Screen(found.x, found.y, found.w, found.h, s)
         again := BlockAround(lines, (mx - found.x) * s, (my - found.y) * s)
         if (again && StrLen(again.text) >= StrLen(found.text) * 0.8)
@@ -179,7 +179,7 @@ RenderParagraph(g, W, st, owner) {
     if (!lk || !lk.ai.enabled)
         NoKeyLine(f, lk)
     else if !lk.ai.done
-        f.Text("asking Gemini" Chr(0x2026), CDim, "s9 Norm Italic")
+        f.Text(lk.ai.Waiting, CDim, "s9 Norm Italic")
     else if (ai && Dig(ai, "summary") != "")
         f.Text(ai["summary"], CText, "s10 Norm")
     else if KeyTrouble(lk)

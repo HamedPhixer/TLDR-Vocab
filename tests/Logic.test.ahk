@@ -242,6 +242,7 @@ try DirDelete(tmp, true)
 ; no connection at all (a proxy on a closed port): the check tries twice,
 ; a few seconds apart, then says so
 IniWrite("127.0.0.1:9", VocabIni(), "Network", "Proxy")
+try IniDelete(VocabIni(), "General", "LastUpdateCheck")
 said := Map()
 start := A_TickCount
 Update.Check(false, (text, found) => said["text"] := text)
@@ -250,13 +251,148 @@ while (!said.Has("text") && A_TickCount - start < 40000)
 IniDelete(VocabIni(), "Network", "Proxy")
 CheckHas("update: no connection says so", said.Has("text") ? said["text"] : "(no answer)", "Could not reach GitHub")
 CheckTrue("update: ...after a second try", A_TickCount - start >= 3000, (A_TickCount - start) " ms")
+Check("update: a day GitHub was not reached is not marked checked"
+    , IniRead(VocabIni(), "General", "LastUpdateCheck", "(none)"), "(none)")
 
 Check("network error: no double brackets",Http.Short("(0x80072EFD)"), "0x80072EFD")
 Check("network error: the text kept", Http.Short("0x80072EE2 - The operation timed out`r`n"), "The operation timed out")
 
+;--- a request that hangs gets a second copy -----------------------------------
+; StallServer.ps1 never answers the first connection and answers the second
+; at once: the step must take the second copy's answer soon after its hedge
+class HedgeTest extends Track {
+    Start() {
+        this.steps := [{name: "stalling server", url: "http://127.0.0.1:18765/", hedge: 700
+            , opts: {timeout: 8000}, parse: (r) => r.text}]
+    }
+}
+IniWrite("none", VocabIni(), "Network", "Proxy")
+ready := A_Temp "\vocab-stall-ready.txt"
+try FileDelete(ready)
+Run('powershell -NoProfile -ExecutionPolicy Bypass -File "' A_ScriptDir '\StallServer.ps1" -Port 18765 -Ready "' ready '"', , "Hide")
+start := A_TickCount
+while (!FileExist(ready) && A_TickCount - start < 15000)
+    Sleep(50)
+t := HedgeTest({query: "hedge"})
+start := A_TickCount
+while (!t.done && A_TickCount - start < 10000) {
+    t.Step()
+    Sleep(50)
+}
+IniDelete(VocabIni(), "Network", "Proxy")
+Check("hedge: a stuck request is answered by its second copy", t.data, "second")
+CheckTrue("hedge: ...soon after the hedge, not at the timeout", A_TickCount - start < 3000, (A_TickCount - start) " ms")
+CheckTrue("hedge: ...and it says it asked again", t.again)
+
+;--- OCR: any engine, even one that cannot take the size asked for --------------
+; A stand-in engine that reads at most 100 px and "finds" one word at a fixed
+; place in whatever bitmap it gets: the boxes must come back in the frame
+; that was asked for (200 x 50 enlarged 2x), not the one it read (100 x 25).
+class TinyOcr {
+    static Name := "test engine", MaxDim := 100, got := ""
+    static Read(hbm) {
+        bm := Buffer(32, 0)
+        DllCall("GetObject", "ptr", hbm, "int", bm.Size, "ptr", bm)
+        TinyOcr.got := NumGet(bm, 4, "int") "x" NumGet(bm, 8, "int")
+        return [{text: "word", words: [{text: "word", x: 10, y: 5, w: 20, h: 10}]}]
+    }
+}
+real := Ocr.Engine
+Ocr.Engine := TinyOcr
+w := Ocr.Screen(0, 0, 200, 50, 2)[1].words[1]
+Ocr.Engine := real
+Check("ocr: the engine gets no more than it takes", TinyOcr.got, "100x25")
+Check("ocr: ...and the boxes come back in the frame asked for"
+    , Round(w.x) "," Round(w.y) "," Round(w.w) "," Round(w.h), "40,20,80,40")
+CheckTrue("ocr: Windows' engine is the one in use", Ocr.Engine.Name = "Windows OCR" && Ocr.MaxScale(800, 220) >= 1.5)
+
+;--- Gemini: what happens after a failed request (no network: answers are faked)
+IniWrite("test-key", VocabIni(), "Gemini", "ApiKey")
+AiTrack.chain := ["model-a", "model-b"], AiTrack.good := ""
+Fail(err, status := 0) => {err: err, status: status, text: "", Ok: false, Why: (err != "") ? err : "HTTP " status}
+t := AiTrack({word: "bank", context: "", mode: "word"})
+first := t.steps[1]
+Check("gemini: starts with the first model", first.model, "model-a")
+t.Got(first, Fail("0x80072EFD"), "")
+Check("gemini: no connection - the same model once more", t.steps[1].model, "model-a")
+CheckTrue("gemini: ...a moment later", t.steps[1].after > A_TickCount, "no pause")
+CheckTrue("gemini: ...and the card says so", InStr(t.Waiting, "asked again"), t.Waiting)
+t.Got(t.steps[1], Fail("0x80072EFD"), "")
+Check("gemini: no connection twice - the next model", t.steps[1].model, "model-b")
+t.Got(t.steps[1], Fail("", 429), "")
+CheckTrue("gemini: quota used up on the last model - done", t.done && t.note = "free quota used up for now", t.note)
+t := AiTrack({word: "bank", context: "", mode: "word"})
+t.t0 := A_TickCount - 28000
+t.Got(t.steps[1], Fail("", 503), "")
+CheckTrue("gemini: out of time - stops and says so", t.done && InStr(t.note, "look up again"), t.note)
+CheckHas("gemini: 2.5 models think a little", t.GenStep("gemini-2.5-flash").opts.body, '"thinkingBudget":512')
+CheckHas("gemini: 3.x models think low", t.GenStep("gemini-3-flash").opts.body, '"thinkingLevel":"low"')
+IniDelete(VocabIni(), "Gemini", "ApiKey")
+AiTrack.chain := ""
+
+;--- words.json: backups, and a file that cannot be read ------------------------
+tmp := A_Temp "\vocab-store-test"
+try DirDelete(tmp, true)
+DirCreate(tmp)
+Store.Path := tmp "\words.json", Store.BackupDir := tmp "\backups", Store.backedUp := ""
+WordsFile(names*) {
+    words := []
+    for n in names
+        words.Push(Map("word", n))
+    return Json.Dump(Map("version", 1, "words", words))
+}
+FileAppend(WordsFile("apple", "bank"), Store.Path, "UTF-8-RAW")
+Store.Load()
+Check("store: reads the words", Store.words.Length, 2)
+today := tmp "\backups\words-" FormatTime(, "yyyy-MM-dd") ".json"
+Store.words.Push(Map("word", "cider"))
+Store.Save()
+Check("store: the day's first save backs up the file as it was", Store.Read(today).Length, 2)
+Check("store: ...and saves the new one", Store.Read(Store.Path).Length, 3)
+Store.words.Push(Map("word", "dune"))
+Store.Save()
+Check("store: later saves that day leave the backup alone", Store.Read(today).Length, 2)
+
+; kept: the newest 10, and the oldest of each of the last 6 months
+FileDelete(today)
+days := ["2025-11-03", "2026-01-20", "2026-02-02", "2026-02-15", "2026-03-01", "2026-04-09", "2026-04-30"
+    , "2026-05-05", "2026-06-10"]
+loop 14
+    days.Push(Format("2026-08-{:02}", A_Index * 2))
+for d in days
+    FileAppend(WordsFile("x"), tmp "\backups\words-" d ".json", "UTF-8-RAW")
+Store.Prune()
+Check("store: prune keeps 10 days and 6 months", Join(Store.Backups(), " ")
+    , "words-2026-02-02.json words-2026-03-01.json words-2026-04-09.json words-2026-05-05.json words-2026-06-10.json"
+    . " words-2026-08-02.json words-2026-08-10.json words-2026-08-12.json words-2026-08-14.json words-2026-08-16.json"
+    . " words-2026-08-18.json words-2026-08-20.json words-2026-08-22.json words-2026-08-24.json words-2026-08-26.json"
+    . " words-2026-08-28.json")
+
+; an unreadable words.json is set aside and the newest backup that reads is loaded
+FileAppend("not json", tmp "\backups\words-2026-08-30.json", "UTF-8-RAW")
+FileAppend(WordsFile("from", "the", "backup"), tmp "\backups\words-2026-08-29.json", "UTF-8-RAW")
+FileDelete(Store.Path)
+FileAppend('{"version": 1, "words": [{"word": "cut off', Store.Path, "UTF-8-RAW")
+Store.words := [], Store.backedUp := ""
+Store.Load()
+Check("store: unreadable - the newest good backup is loaded", Store.words.Length "," Store.words[1]["word"], "3,from")
+Check("store: ...and written back as words.json", Store.Read(Store.Path) ? Store.Read(Store.Path).Length : 0, 3)
+set := 0
+loop files tmp "\words.unreadable-*.json"
+    set++
+Check("store: ...and the broken file kept aside", set, 1)
+Store.Path := A_ScriptDir "\words.json", Store.BackupDir := A_ScriptDir "\backups", Store.words := []
+try DirDelete(tmp, true)
+
 ;--- small helpers -------------------------------------------------------------
 Check("clean word: quotes and comma", CleanWord(Chr(0x201C) "Hello," Chr(0x201D)), "Hello")
 Check("clean word: possessive", CleanWord("harbour's"), "harbour")
+Check("clean word: a footnote read as digits", CleanWord("abridged119"), "abridged")
+Check("clean word: a footnote in brackets", CleanWord("abridged[119]"), "abridged")
+Check("clean word: a short name keeps its digits", CleanWord("mp3") "," CleanWord("B12"), "mp3,B12")
+Check("clean word: a phrase loses Markdown marks", CleanWord("__delaunay triangulation__"), "delaunay triangulation")
+Check("clean word: a phrase keeps its inner punctuation", CleanWord("(de Casteljau's algorithm)"), "de Casteljau's algorithm")
+Check("clean word: nothing but punctuation", CleanWord("..."), "")
 CheckTrue("Gemini fix: a real correction", UsableFix("teaching", "eachin"))
 CheckTrue("Gemini fix: same word is ignored", !UsableFix("Teaching", "teaching"))
 CheckTrue("Gemini fix: a sentence is ignored", !UsableFix("this is not a word at all", "word"))
