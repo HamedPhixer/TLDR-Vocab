@@ -2,6 +2,17 @@
 
 Each version's notes. The release on GitHub is built from the section with its number.
 
+## 1.2.1 — 2026-09-26
+
+### Changed
+
+- **A Gemini model that has used up its free requests for the day is left alone until they start again**
+  (midnight in California), instead of being asked first on every lookup. The newest Flash allows only 20
+  a day on a free key. When every model is out, the card says until when. A model that is only busy, or
+  out of its per-minute requests, is skipped for about a minute.
+- The list of Gemini models is asked for once a day instead of at every start, and what is known about the
+  models — including which ones are resting — is kept across a restart (in `cache\gemini.json`).
+
 ## 1.2.0 — 2026-09-26
 
 Everything since 1.0.0 — tried out first in the 1.1.0 and 1.2.0 test versions — plus a few last fixes.

@@ -883,8 +883,11 @@ class FaTrack extends Track {
 ;     a request from the free quota only then.
 ;   - a request that could not connect at all is sent again once, a second
 ;     later, before the next model is tried
-;   - a model that answered 503 or 429 rests for Rest ms: the next lookups
-;     try it last instead of waiting on it first
+;   - a model that said no rests (RestUntil): out of its day's free quota -
+;     20 requests on 3.8 Flash - until the quota day starts again; out of
+;     the minute's, or overloaded (503), for about a minute. Resting models
+;     are skipped, and asked only when no other model is left. The rests
+;     are kept in cache\gemini.json, so a restart does not forget them.
 ;   - all of it, every model and every retry, stops at Budget ms, with a note
 ;     that says to look up again
 ;--------------------------------------------------------------------------------
@@ -894,7 +897,14 @@ class AiTrack extends Track {
     ; the -latest aliases follow whatever Flash is current, so they never go
     ; out of date the way named models do (docs\decisions.md)
     static Guess := ["gemini-flash-latest", "gemini-flash-lite-latest"]
-    static Hedge := 10000, Budget := 30000, Rest := 60000, resting := Map()
+    static Hedge := 10000, Budget := 30000
+    ; What is known about the models is kept in cache\gemini.json, so a
+    ; restart neither asks for the list again the same day nor tries a model
+    ; that is still out of quota:
+    ;   {"models": [...], "listed": "YYYYMMDD", "resting": {model: till}}
+    ; till is UTC, YYYYMMDDHHMISS.
+    static resting := Map(), listed := "", loaded := false, listing := false
+    static StateFile => Cache.Dir "\gemini.json"
 
     Start() {
         this.key := GeminiKey()
@@ -909,31 +919,122 @@ class AiTrack extends Track {
         }
         this.models := AiTrack.Models()
         this.steps := this.models.Length ? [this.GenStep(this.models[1])] : [this.ListStep()]
+        if (this.models.Length && AiTrack.listed != FormatTime(, "yyyyMMdd"))
+            AiTrack.Warm()                  ; a new day: a fresh list for the next lookup
     }
 
     Waiting => "asking Gemini" Chr(0x2026) (this.again ? "  slow connection, asked again" : "")
     Left => AiTrack.Budget - (A_TickCount - this.t0)
 
-    ; At start, a few seconds in: the model list, so the first lookup goes
-    ; straight to a model - and a connection that some networks drop on a
-    ; fresh start is spent here rather than on a lookup. Failing is fine; the
-    ; lookup asks for the list itself then.
+    ; The model list, once a day, in the background: at start (a few seconds
+    ; in) unless today's is saved, and on the first lookup of a new day.
+    ; Failing is fine; a lookup with no list at all asks for it itself.
     static Warm() {
+        AiTrack.LoadState()
         key := GeminiKey()
-        if (key = "" || AiTrack.chain)
+        if (key = "" || AiTrack.listing || AiTrack.listed = FormatTime(, "yyyyMMdd"))
             return
+        AiTrack.listing := true
         req := Http(AiTrack.Api "models?pageSize=1000", {timeout: 8000, headers: Map("x-goog-api-key", key)})
         poll() {
             if !req.Poll()
                 return
             SetTimer(poll, 0)
-            if (req.Ok && !AiTrack.chain)
-                try AiTrack.chain := AiTrack.PickModels(req)
+            AiTrack.listing := false
+            if req.Ok
+                try AiTrack.KeepList(AiTrack.PickModels(req))
         }
         SetTimer(poll, 200)
     }
 
+    static KeepList(chain) {
+        AiTrack.chain := chain, AiTrack.listed := FormatTime(, "yyyyMMdd")
+        AiTrack.SaveState()
+    }
+
+    static LoadState() {
+        if AiTrack.loaded
+            return
+        AiTrack.loaded := true
+        try {
+            s := Json.Parse(FileRead(AiTrack.StateFile, "UTF-8"))
+            if (Dig(s, "listed") = FormatTime(, "yyyyMMdd") && Dig(s, "models") is Array && s["models"].Length)
+                AiTrack.chain := s["models"], AiTrack.listed := s["listed"]
+            if (Dig(s, "resting") is Map)
+                for m, till in s["resting"]
+                    if AiTrack.IsResting(m, till)
+                        AiTrack.resting[m] := till
+        }
+    }
+
+    static SaveState() {
+        for m, till in AiTrack.resting.Clone()     ; the rests that are over go
+            if !AiTrack.IsResting(m)
+                AiTrack.resting.Delete(m)
+        try {
+            DirCreate(Cache.Dir)
+            WriteFileAtomic(AiTrack.StateFile, Json.Dump(Map("models", AiTrack.chain || []
+                , "listed", AiTrack.listed, "resting", AiTrack.resting), " "))
+        } catch as e
+            VocabLog("saving gemini.json failed: " e.Message)
+    }
+
+    static IsResting(m, till := "") {
+        if (till = "")
+            till := AiTrack.resting.Has(m) ? AiTrack.resting[m] : ""
+        return till != "" && DateDiff(till, A_NowUTC, "Seconds") > 0
+    }
+
+    ; How long a model that said no rests (UTC, until when). 429 says which
+    ; quota ran out: the day's - 20 requests for 3.8 Flash on a free key - is
+    ; out until Google's quota day starts again, at midnight Pacific time;
+    ; the minute's for as long as its retryDelay says. 503, overloaded: a
+    ; minute.
+    static RestUntil(r) {
+        wait := 60
+        if (r.status = 429) {
+            try {
+                for det in (Dig(Json.Parse(r.text), "error", "details") || []) {
+                    for v in (Dig(det, "violations") || [])
+                        if InStr(Dig(v, "quotaId"), "PerDay")
+                            return AiTrack.NextQuotaDay()
+                    if (RegExMatch(Dig(det, "retryDelay"), "^([\d.]+)s$", &m) && m[1] > 0)
+                        wait := Min(Max(Ceil(m[1]), 10), 300)
+                }
+            }
+        }
+        return DateAdd(A_NowUTC, wait, "Seconds")
+    }
+
+    ; the next midnight in California, in UTC - when free quotas start again
+    static NextQuotaDay(now := "") {
+        now := (now = "") ? A_NowUTC : now
+        midnight := DateAdd(SubStr(DateAdd(now, -AiTrack.Pacific(now), "Hours"), 1, 8), 1, "Days")
+        ; the hours behind UTC at that midnight, not now: the night summer
+        ; time ends, they differ
+        summer := DateAdd(midnight, 7, "Hours")
+        return (AiTrack.Pacific(summer) = 7) ? summer : DateAdd(midnight, 8, "Hours")
+    }
+
+    ; hours California is behind UTC at that moment: 7 in summer time - from
+    ; the second Sunday of March, 2:00 there (10:00 UTC), to the first Sunday
+    ; of November, 2:00 there (9:00 UTC) - 8 otherwise
+    static Pacific(utc) {
+        y := SubStr(utc, 1, 4)
+        from := DateAdd(AiTrack.Sunday(y, 3, 2), 10, "Hours"), to := DateAdd(AiTrack.Sunday(y, 11, 1), 9, "Hours")
+        return (DateDiff(utc, from, "Seconds") >= 0 && DateDiff(utc, to, "Seconds") < 0) ? 7 : 8
+    }
+
+    static Sunday(y, month, n) {                ; the nth Sunday of that month, YYYYMMDD
+        first := y Format("{:02}", month) "01"
+        return y Format("{:02}{:02}", month, 1 + Mod(8 - FormatTime(first, "WDay"), 7) + 7 * (n - 1))
+    }
+
+    ; "until 10:30", in this PC's own time
+    static LocalTime(utc) => FormatTime(DateAdd(utc, DateDiff(A_Now, A_NowUTC, "Minutes"), "Minutes"), "HH:mm")
+
     static Models() {
+        AiTrack.LoadState()
         chain := AiTrack.chain ? AiTrack.chain.Clone() : []
         m := GeminiModel()
         if (m != "") {
@@ -943,10 +1044,11 @@ class AiTrack extends Track {
         }
         if (AiTrack.good != "" && chain.Length)
             chain.InsertAt(1, AiTrack.good)
+        ; resting models last - asked only when no other is left
         out := [], tired := []
         for x in chain
             if !HasVal(out, x) && !HasVal(tired, x)
-                (AiTrack.resting.Has(x) && A_TickCount < AiTrack.resting[x] ? tired : out).Push(x)
+                (AiTrack.IsResting(x) ? tired : out).Push(x)
         for x in tired
             out.Push(x)
         return out
@@ -1001,7 +1103,7 @@ class AiTrack extends Track {
         }
         if (s.kind = "list") {
             if result
-                AiTrack.chain := result
+                AiTrack.KeepList(result)
             this.models := AiTrack.Models()
             if !this.models.Length
                 this.models := AiTrack.Guess.Clone()
@@ -1024,17 +1126,35 @@ class AiTrack extends Track {
             this.retried[s.model] := true, this.again := true
             return this.Next(this.GenStep(s.model, A_TickCount + 1000))
         }
-        if (r.status = 429 || r.status = 503)
-            AiTrack.resting[s.model] := A_TickCount + AiTrack.Rest
+        if (r.status = 429 || r.status = 503) {
+            AiTrack.resting[s.model] := AiTrack.RestUntil(r)
+            AiTrack.SaveState()
+        }
+        if (r.status = 404) {                   ; a model Google retired: a new list next time
+            AiTrack.chain := "", AiTrack.listed := ""
+            AiTrack.SaveState()
+        }
+        ; on to the next model - but not to one that is resting: those are
+        ; only asked when nothing else is left, and then only the first
         if (r.status = 429 || r.status = 404 || r.status = 403 || r.status >= 500 || r.err != "") {
             for i, m in this.models
-                if (m = s.model && i < this.models.Length)
+                if (m = s.model && i < this.models.Length && !AiTrack.IsResting(this.models[i + 1]))
                     return this.Next(this.GenStep(this.models[i + 1]))
         }
-        this.note := (r.status = 429) ? "free quota used up for now"
+        this.note := (r.status = 429) ? AiTrack.QuotaNote()
                    : r.Ok ? "no usable answer"
                    : (msg != "") ? Http.Short(msg) : r.Why
         return this.Finish()
+    }
+
+    ; out of free quota everywhere: until when, if it is more than a moment
+    static QuotaNote() {
+        soonest := ""
+        for m, till in AiTrack.resting
+            if (AiTrack.IsResting(m) && (soonest = "" || DateDiff(till, soonest, "Seconds") < 0))
+                soonest := till
+        return (soonest != "" && DateDiff(soonest, A_NowUTC, "Minutes") >= 10)
+            ? "free quota used up until " AiTrack.LocalTime(soonest) : "free quota used up for now"
     }
 
     ; A whole sentence, for someone reading a game or a blog: what it says in

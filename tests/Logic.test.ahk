@@ -308,7 +308,9 @@ CheckTrue("ocr: Windows' engine is the one in use", Ocr.Engine.Name = "Windows O
 
 ;--- Gemini: what happens after a failed request (no network: answers are faked)
 IniWrite("test-key", VocabIni(), "Gemini", "ApiKey")
+try FileDelete(AiTrack.StateFile)
 AiTrack.chain := ["model-a", "model-b"], AiTrack.good := ""
+AiTrack.loaded := true, AiTrack.listed := FormatTime(, "yyyyMMdd")    ; no list request
 Fail(err, status := 0) => {err: err, status: status, text: "", Ok: false, Why: (err != "") ? err : "HTTP " status}
 t := AiTrack({word: "bank", context: "", mode: "word"})
 first := t.steps[1]
@@ -326,8 +328,8 @@ AiTrack.resting := Map()
 t := AiTrack({word: "bank", context: "", mode: "word"})
 t.Got(t.steps[1], Fail("", 503), "")
 Check("gemini: an overloaded model rests too", Join(AiTrack.Models(), ","), "model-b,model-a")
-AiTrack.resting["model-b"] := A_TickCount - 1
-AiTrack.resting["model-a"] := A_TickCount - 1
+AiTrack.resting["model-b"] := DateAdd(A_NowUTC, -1, "Seconds")
+AiTrack.resting["model-a"] := DateAdd(A_NowUTC, -1, "Seconds")
 Check("gemini: ...and is first again after its rest", Join(AiTrack.Models(), ","), "model-a,model-b")
 AiTrack.resting := Map()
 t := AiTrack({word: "bank", context: "", mode: "word"})
@@ -336,8 +338,46 @@ t.Got(t.steps[1], Fail("", 503), "")
 CheckTrue("gemini: out of time - stops and says so", t.done && InStr(t.note, "look up again"), t.note)
 CheckHas("gemini: 2.5 models think a little", t.GenStep("gemini-2.5-flash").opts.body, '"thinkingBudget":512')
 CheckHas("gemini: 3.x models think low", t.GenStep("gemini-3-flash").opts.body, '"thinkingLevel":"low"')
+
+; how long a model rests: the 429 says which quota ran out
+Check("gemini: quota day - summer, afternoon in California", AiTrack.NextQuotaDay("20260926200000"), "20260927070000")
+Check("gemini: quota day - a second before it starts", AiTrack.NextQuotaDay("20260927065959"), "20260927070000")
+Check("gemini: quota day - winter", AiTrack.NextQuotaDay("20260115100000"), "20260116080000")
+Check("gemini: quota day - the night summer time ends", AiTrack.NextQuotaDay("20261101080000"), "20261102080000")
+Check("gemini: quota day - the night summer time starts", AiTrack.NextQuotaDay("20260308060000"), "20260308080000")
+Check("gemini: quota day - the day after", AiTrack.NextQuotaDay("20260308120000"), "20260309070000")
+Quota(id, delay) => Fail("", 429).DefineProp("text", {value: '{"error": {"code": 429, "details": ['
+    . '{"@type": "type.googleapis.com/google.rpc.QuotaFailure", "violations": [{"quotaId": "' id '"}]},'
+    . '{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "' delay '"}]}}'})
+day := Quota("GenerateRequestsPerDayPerProjectPerModel-FreeTier", "0s")
+Check("gemini: out of the day's quota - rests until the quota day", AiTrack.RestUntil(day), AiTrack.NextQuotaDay())
+secs := DateDiff(AiTrack.RestUntil(Quota("GenerateRequestsPerMinutePerProjectPerModel-FreeTier", "34s")), A_NowUTC, "Seconds")
+CheckTrue("gemini: out of the minute's - as long as it says", secs >= 33 && secs <= 35, secs " s")
+secs := DateDiff(AiTrack.RestUntil(Fail("", 503)), A_NowUTC, "Seconds")
+CheckTrue("gemini: overloaded - a minute", secs >= 59 && secs <= 61, secs " s")
+
+; everything resting: only the first is asked, then it stops and says until when
+AiTrack.resting := Map("model-a", AiTrack.NextQuotaDay(), "model-b", AiTrack.NextQuotaDay())
+t := AiTrack({word: "bank", context: "", mode: "word"})
+t.Got(t.steps[1], day, "")
+CheckTrue("gemini: all out of quota - one try, not every model", t.done, "went on to " (t.steps.Length ? t.steps[1].model : "?"))
+CheckHas("gemini: ...and says until when", t.note, "free quota used up until " AiTrack.LocalTime(AiTrack.NextQuotaDay()))
+
+; kept across a restart: today's list and the rests; yesterday's list is not
+AiTrack.SaveState()
+AiTrack.chain := "", AiTrack.listed := "", AiTrack.resting := Map(), AiTrack.loaded := false
+AiTrack.LoadState()
+Check("gemini: a restart keeps today's list", Join(AiTrack.chain, ","), "model-a,model-b")
+CheckTrue("gemini: ...and the rests", AiTrack.IsResting("model-a") && AiTrack.IsResting("model-b"))
+FileDelete(AiTrack.StateFile)
+FileAppend('{"models": ["old"], "listed": "' FormatTime(DateAdd(A_Now, -1, "Days"), "yyyyMMdd") '", "resting": {}}'
+    , AiTrack.StateFile, "UTF-8-RAW")
+AiTrack.chain := "", AiTrack.listed := "", AiTrack.loaded := false
+AiTrack.LoadState()
+Check("gemini: ...but yesterday's list is asked for again", AiTrack.chain, "")
+try FileDelete(AiTrack.StateFile)
 IniDelete(VocabIni(), "Gemini", "ApiKey")
-AiTrack.chain := "", AiTrack.resting := Map()
+AiTrack.chain := "", AiTrack.resting := Map(), AiTrack.listed := ""
 
 ;--- words.json: backups, and a file that cannot be read ------------------------
 tmp := A_Temp "\vocab-store-test"

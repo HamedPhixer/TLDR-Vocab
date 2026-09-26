@@ -109,7 +109,17 @@ at `:` or `;` left Gemini half a sentence of context.
   honest tool. A request that could not connect at all is sent again once, a
   second later, before the next model; everything together stops at 30 s
   with "look up again". `thinkingLevel: minimal` is refused by 3.8 Flash
-  (HTTP 400). The first lookup after start also had to fetch
+  (HTTP 400).
+- **The daily cap (1.2.1).** A free key gets 20 requests a day on 3.8 Flash
+  (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, value 20) — about a
+  morning of lookups. The 429 says which quota ran out: a day's rests the
+  model until Google's quota day starts again, midnight Pacific time; a
+  minute's, as long as its `retryDelay`; a 503, a minute. A flat six hours was
+  considered: the reset time is known, so it is used. Rests are kept in
+  `cache\gemini.json` with the model list, which is now asked for once a
+  day, and on a 404 (a model Google retired). Resting models are asked only
+  when no other is left, and then only one — all out of quota, one quick
+  429 and the card says until when. The first lookup after start also had to fetch
   the model list before it could ask anything; the list is now fetched 3 s
   after start.
 - **Thinking stays on, but low** (the user's choice): 3.x models get
