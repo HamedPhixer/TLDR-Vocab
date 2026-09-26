@@ -908,7 +908,7 @@ class AiTrack extends Track {
 
     Start() {
         this.key := GeminiKey()
-        this.noThink := false, this.t0 := A_TickCount, this.retried := Map()
+        this.noThink := false, this.t0 := A_TickCount, this.retried := Map(), this.status := ""
         if (this.key = "") {
             this.enabled := false, this.done := true, this.note := "no key"
             return
@@ -919,11 +919,45 @@ class AiTrack extends Track {
         }
         this.models := AiTrack.Models()
         this.steps := this.models.Length ? [this.GenStep(this.models[1])] : [this.ListStep()]
+        if (this.models.Length > 1 && AiTrack.IsResting(this.models[this.models.Length])) {
+            ; some are resting: say why a different model is asked
+            first := this.models[1], skipped := ""
+            for m in this.models
+                if (AiTrack.IsResting(m) && m != first) {
+                    skipped := m
+                    break
+                }
+            if (skipped != "" && !AiTrack.IsResting(first))
+                this.status := AiTrack.Short(first) " - " AiTrack.Why(skipped)
+        }
         if (this.models.Length && AiTrack.listed != FormatTime(, "yyyyMMdd"))
             AiTrack.Warm()                  ; a new day: a fresh list for the next lookup
     }
 
-    Waiting => "asking Gemini" Chr(0x2026) (this.again ? "  slow connection, asked again" : "")
+    ; What the card shows while it waits. Normally just "asking Gemini...";
+    ; when something is not normal, one more line says what - so a busy or
+    ; used-up model does not look like a broken connection.
+    Waiting => "asking Gemini" Chr(0x2026) ((this.status != "") ? "`n" this.status
+        : this.again ? "`nno answer yet, asked again" : "")
+
+    ; "gemini-3.5-flash-lite" -> "3.5 Flash-Lite"
+    static Short(m) {
+        m := RegExReplace(m, "^gemini-")
+        m := RegExReplace(m, "^flash-lite-latest$", "Flash-Lite (latest)")
+        m := RegExReplace(m, "^flash-latest$", "Flash (latest)")
+        m := RegExReplace(m, "-flash-lite$", " Flash-Lite")
+        return RegExReplace(m, "-flash$", " Flash")
+    }
+
+    ; why a model is resting, in a few words
+    static Why(m) {
+        if !AiTrack.IsResting(m)
+            return ""
+        till := AiTrack.resting[m]
+        return (DateDiff(till, A_NowUTC, "Minutes") >= 10)
+            ? AiTrack.Short(m) " is out of today's free requests (until " AiTrack.LocalTime(till) ")"
+            : AiTrack.Short(m) " is busy for a minute"
+    }
     Left => AiTrack.Budget - (A_TickCount - this.t0)
 
     ; The model list, once a day, in the background: at start (a few seconds
@@ -1081,13 +1115,25 @@ class AiTrack extends Track {
     }
 
     ; the next request, unless the time for all of them is up
-    Next(step) {
+    ; what a model's answer meant, for the waiting line
+    static Said(m, r) {
+        if (r.status = 429 || r.status = 503)
+            return AiTrack.Why(m)
+        return AiTrack.Short(m) ((r.status = 404) ? " is no longer offered"
+            : (r.err = "timed out") ? " did not answer"
+            : (r.err != "") ? ": no connection"
+            : " failed (" r.Why ")")
+    }
+
+    Next(step, status := "") {
         if (this.Left < 3000) {
             this.note := "no answer in " AiTrack.Budget // 1000 " s - look up again"
             return this.Finish()
         }
         this.steps := [step]
-        return false
+        if (status != "")
+            this.status := status
+        return (status != "")                  ; true: the card redraws its waiting line
     }
 
     Got(s, r, result) {
@@ -1124,7 +1170,7 @@ class AiTrack extends Track {
         ; same model, a second later - the first try is what some networks drop
         if (r.err != "" && r.err != "timed out" && !r.status && !this.retried.Has(s.model)) {
             this.retried[s.model] := true, this.again := true
-            return this.Next(this.GenStep(s.model, A_TickCount + 1000))
+            return this.Next(this.GenStep(s.model, A_TickCount + 1000), "could not connect, asked again")
         }
         if (r.status = 429 || r.status = 503) {
             AiTrack.resting[s.model] := AiTrack.RestUntil(r)
@@ -1139,9 +1185,11 @@ class AiTrack extends Track {
         if (r.status = 429 || r.status = 404 || r.status = 403 || r.status >= 500 || r.err != "") {
             for i, m in this.models
                 if (m = s.model && i < this.models.Length && !AiTrack.IsResting(this.models[i + 1]))
-                    return this.Next(this.GenStep(this.models[i + 1]))
+                    return this.Next(this.GenStep(this.models[i + 1])
+                        , AiTrack.Said(s.model, r) ", trying " AiTrack.Short(this.models[i + 1]))
         }
         this.note := (r.status = 429) ? AiTrack.QuotaNote()
+                   : (r.status = 503) ? AiTrack.Said(s.model, r)
                    : r.Ok ? "no usable answer"
                    : (msg != "") ? Http.Short(msg) : r.Why
         return this.Finish()

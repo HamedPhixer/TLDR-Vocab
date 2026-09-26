@@ -321,6 +321,7 @@ CheckTrue("gemini: ...a moment later", t.steps[1].after > A_TickCount, "no pause
 CheckTrue("gemini: ...and the card says so", InStr(t.Waiting, "asked again"), t.Waiting)
 t.Got(t.steps[1], Fail("0x80072EFD"), "")
 Check("gemini: no connection twice - the next model", t.steps[1].model, "model-b")
+CheckHas("gemini: ...and the card says so", t.Waiting, "model-a: no connection, trying model-b")
 t.Got(t.steps[1], Fail("", 429), "")
 CheckTrue("gemini: quota used up on the last model - done", t.done && t.note = "free quota used up for now", t.note)
 CheckTrue("gemini: ...and that model rests for a minute", AiTrack.resting.Has("model-b"))
@@ -355,6 +356,22 @@ secs := DateDiff(AiTrack.RestUntil(Quota("GenerateRequestsPerMinutePerProjectPer
 CheckTrue("gemini: out of the minute's - as long as it says", secs >= 33 && secs <= 35, secs " s")
 secs := DateDiff(AiTrack.RestUntil(Fail("", 503)), A_NowUTC, "Seconds")
 CheckTrue("gemini: overloaded - a minute", secs >= 59 && secs <= 61, secs " s")
+
+; the waiting line: nothing extra when all is normal; what happened when not
+Check("gemini: model names, short", AiTrack.Short("gemini-3.8-flash") "|" AiTrack.Short("gemini-3.5-flash-lite")
+    . "|" AiTrack.Short("gemini-flash-latest"), "3.8 Flash|3.5 Flash-Lite|Flash (latest)")
+AiTrack.resting := Map()
+t := AiTrack({word: "bank", context: "", mode: "word"})
+Check("gemini: waiting, all normal", t.Waiting, "asking Gemini" Chr(0x2026))
+back := AiTrack.LocalTime(AiTrack.NextQuotaDay())
+CheckTrue("gemini: out of the day's quota - the card redraws", t.Got(t.steps[1], day, ""))
+CheckHas("gemini: ...and says why the next model", t.Waiting
+    , "model-a is out of today's free requests (until " back "), trying model-b")
+t := AiTrack({word: "bank", context: "", mode: "word"})
+CheckHas("gemini: the next lookup says why it skips one", t.Waiting
+    , "model-b - model-a is out of today's free requests (until " back ")")
+t.Got(t.steps[1], Fail("", 503), "")
+CheckTrue("gemini: the last model left is busy - it says so", t.done && t.note = "model-b is busy for a minute", t.note)
 
 ; everything resting: only the first is asked, then it stops and says until when
 AiTrack.resting := Map("model-a", AiTrack.NextQuotaDay(), "model-b", AiTrack.NextQuotaDay())

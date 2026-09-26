@@ -6,6 +6,11 @@ Each version's notes. The release on GitHub is built from the section with its n
 
 ### Changed
 
+- **"asking Gemini…" says what is going on** when something is not normal — which model it is asking and
+  why: "3.8 Flash is out of today's free requests (until 10:30), trying 3.7 Flash", "is busy for a
+  minute", "could not connect, asked again". A busy model no longer looks like a broken connection. When
+  all is well it says only "asking Gemini…", as before.
+
 - **A Gemini model that has used up its free requests for the day is left alone until they start again**
   (midnight in California), instead of being asked first on every lookup. The newest Flash allows only 20
   a day on a free key. When every model is out, the card says until when. A model that is only busy, or
