@@ -23,6 +23,15 @@ is read at 1× only to find the text, and that text is read again at 1.5× for
 the words. Summary got the same second read later: small print read at 1×
 came out noticeably worse.
 
+**A looked-up word's sentence (1.2.0).** The word lookup reads an 800 px
+band around the pointer — fast, and enough for the word. Its sentence came
+from the same band, so on an article line wider than that it lost its ends
+("…sentence 2 of seven, so it tence 3 of seven…") and Gemini explained the
+word from the scraps. Now, when the sentence's lines touch the band's edge,
+it is read again the way Translate reads (the whole monitor, then the block)
+but kept to the one sentence. A sentence that fits the band costs nothing
+more.
+
 **The engine sits behind one door (1.2.0).** `lib\Ocr.ahk` is all the app
 calls; Windows' reader is one engine behind it (`WinOcr`, `lib\OcrWindows.ahk`).
 How much to enlarge was spread over four files as bare numbers, all measured
@@ -82,14 +91,25 @@ at `:` or `;` left Gemini half a sentence of context.
   not decide the models until a restart.
 - **The key test** asks for the model list, not a generation, so it costs none
   of the free quota.
-- **Waiting (1.2.0).** Sometimes "asking Gemini…" sat there until the 15 s
-  timeout, and pressing "look up again" answered at once — the mark of a
-  connection that stalled (common behind a VPN or proxy), not of a slow
-  model. Now, after 6 s with no answer, one more copy of the request goes out
-  and the first answer wins (hedging — the usual cure for a slow tail of
-  requests). A request that could not connect at all is sent again once, a
-  second later, before the next model; and everything together stops at
-  30 s with "look up again". The first lookup after start also had to fetch
+- **Waiting (1.2.0).** Sometimes "asking Gemini…" sat there for a long
+  time, and pressing "look up again" answered at once. Measured through the
+  VPN: reaching Google takes 0.3 s (sometimes 1.3); 3.8 Flash answers in 2.6
+  to 6.2 s, 3.5 Flash-Lite in 1.3 s but in broken English; busy models
+  answer 503 after 2 to 6 s — 3.7 Flash did every time that day — and the
+  free per-minute quota runs out after a handful of quick requests (429).
+  So the long waits were mostly busy models asked one after another, each
+  costing seconds. Now a model that answered 503 or 429 rests for a minute:
+  asked last, not first. For a connection that really stalls, after 10 s
+  with no answer one more copy goes out and the first answer wins (hedging).
+  A first try at 6 s was dropped: it would fire on ordinary 6 s answers and
+  spend the per-minute quota. The app cannot tell a stalled connection from
+  Gemini thinking — Windows' HTTP object ends a stalled TLS handshake and a
+  slow answer on the same "receive" timeout (tested), and Gemini's streaming
+  answer sends nothing until the answer is ready — so a fixed wait is the
+  honest tool. A request that could not connect at all is sent again once, a
+  second later, before the next model; everything together stops at 30 s
+  with "look up again". `thinkingLevel: minimal` is refused by 3.8 Flash
+  (HTTP 400). The first lookup after start also had to fetch
   the model list before it could ask anything; the list is now fetched 3 s
   after start.
 - **Thinking stays on, but low** (the user's choice): 3.x models get

@@ -870,15 +870,21 @@ class FaTrack extends Track {
 ; Flash-Lite accepts), 3.x take thinkingLevel; if a model rejects either, the
 ; request is repeated without it.
 ;
-; WAITING. An answer normally takes a few seconds. A connection that stalls -
-; common behind a VPN or proxy - used to leave "asking Gemini..." up for the
-; full 15 s timeout, then move to the next model; pressing "look up again"
-; was quicker. Now:
-;   - after Hedge ms with no answer, one more copy of the request is sent and
-;     the first answer is taken (Track.Answered). A slow answer thus costs one
-;     extra request from the free quota; a quick one costs nothing extra.
+; WAITING. Measured through a VPN (September 2026): reaching Google takes
+; 0.3 s, sometimes 1.3; the rest is Gemini itself - 1.3 s for 3.5 Flash-Lite,
+; 2.6 to 6.2 s for 3.8 Flash - and busy models answer 503 ("overloaded")
+; after 2 to 6 s, or 429 when the free per-minute quota is used up. The app
+; cannot tell a stalled connection from Gemini still thinking: Windows' HTTP
+; object shows neither, both run out on the same "receive" timeout (tested),
+; and even Gemini's streaming answer sends nothing until the answer is ready.
+; So:
+;   - after Hedge ms with no answer - well past a normal answer - one more
+;     copy is sent and the first answer is taken (Track.Answered). It costs
+;     a request from the free quota only then.
 ;   - a request that could not connect at all is sent again once, a second
 ;     later, before the next model is tried
+;   - a model that answered 503 or 429 rests for Rest ms: the next lookups
+;     try it last instead of waiting on it first
 ;   - all of it, every model and every retry, stops at Budget ms, with a note
 ;     that says to look up again
 ;--------------------------------------------------------------------------------
@@ -888,7 +894,7 @@ class AiTrack extends Track {
     ; the -latest aliases follow whatever Flash is current, so they never go
     ; out of date the way named models do (docs\decisions.md)
     static Guess := ["gemini-flash-latest", "gemini-flash-lite-latest"]
-    static Hedge := 6000, Budget := 30000
+    static Hedge := 10000, Budget := 30000, Rest := 60000, resting := Map()
 
     Start() {
         this.key := GeminiKey()
@@ -937,10 +943,12 @@ class AiTrack extends Track {
         }
         if (AiTrack.good != "" && chain.Length)
             chain.InsertAt(1, AiTrack.good)
-        out := []
+        out := [], tired := []
         for x in chain
-            if !HasVal(out, x)
-                out.Push(x)
+            if !HasVal(out, x) && !HasVal(tired, x)
+                (AiTrack.resting.Has(x) && A_TickCount < AiTrack.resting[x] ? tired : out).Push(x)
+        for x in tired
+            out.Push(x)
         return out
     }
 
@@ -1016,6 +1024,8 @@ class AiTrack extends Track {
             this.retried[s.model] := true, this.again := true
             return this.Next(this.GenStep(s.model, A_TickCount + 1000))
         }
+        if (r.status = 429 || r.status = 503)
+            AiTrack.resting[s.model] := A_TickCount + AiTrack.Rest
         if (r.status = 429 || r.status = 404 || r.status = 403 || r.status >= 500 || r.err != "") {
             for i, m in this.models
                 if (m = s.model && i < this.models.Length)

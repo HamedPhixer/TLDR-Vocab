@@ -321,6 +321,15 @@ t.Got(t.steps[1], Fail("0x80072EFD"), "")
 Check("gemini: no connection twice - the next model", t.steps[1].model, "model-b")
 t.Got(t.steps[1], Fail("", 429), "")
 CheckTrue("gemini: quota used up on the last model - done", t.done && t.note = "free quota used up for now", t.note)
+CheckTrue("gemini: ...and that model rests for a minute", AiTrack.resting.Has("model-b"))
+AiTrack.resting := Map()
+t := AiTrack({word: "bank", context: "", mode: "word"})
+t.Got(t.steps[1], Fail("", 503), "")
+Check("gemini: an overloaded model rests too", Join(AiTrack.Models(), ","), "model-b,model-a")
+AiTrack.resting["model-b"] := A_TickCount - 1
+AiTrack.resting["model-a"] := A_TickCount - 1
+Check("gemini: ...and is first again after its rest", Join(AiTrack.Models(), ","), "model-a,model-b")
+AiTrack.resting := Map()
 t := AiTrack({word: "bank", context: "", mode: "word"})
 t.t0 := A_TickCount - 28000
 t.Got(t.steps[1], Fail("", 503), "")
@@ -328,7 +337,7 @@ CheckTrue("gemini: out of time - stops and says so", t.done && InStr(t.note, "lo
 CheckHas("gemini: 2.5 models think a little", t.GenStep("gemini-2.5-flash").opts.body, '"thinkingBudget":512')
 CheckHas("gemini: 3.x models think low", t.GenStep("gemini-3-flash").opts.body, '"thinkingLevel":"low"')
 IniDelete(VocabIni(), "Gemini", "ApiKey")
-AiTrack.chain := ""
+AiTrack.chain := "", AiTrack.resting := Map()
 
 ;--- words.json: backups, and a file that cannot be read ------------------------
 tmp := A_Temp "\vocab-store-test"

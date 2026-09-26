@@ -26,10 +26,11 @@ Everything since 1.0.0 — tried out first in the 1.1.0 and 1.2.0 test versions 
 
 ### Changed
 
-- **Gemini answers when the connection stalls.** If no answer comes within 6 seconds, the question is
-  sent once more and the first answer is used — what pressing "look up again" used to do by hand. A
-  connection that fails outright is tried again before the next model, and after 30 seconds the card
-  says so instead of waiting on.
+- **Gemini waits less.** A model that is overloaded or out of free quota is skipped for a minute, instead
+  of being asked first — and waited on — every time. If no answer comes within 10 seconds (a normal one
+  takes 2 to 6), the question is sent once more and the first answer is used — what pressing "look up
+  again" used to do by hand. A connection that fails outright is tried again before the next model, and
+  after 30 seconds the card says so instead of waiting on.
 - Gemini thinks a little on every model (2.5 models did not think at all), so the meaning fits the
   sentence better.
 - Settings scrolls, and can be made shorter or taller.
@@ -39,6 +40,9 @@ Everything since 1.0.0 — tried out first in the 1.1.0 and 1.2.0 test versions 
 
 ### Fixed
 
+- The sentence a looked-up word came with could lose its ends when its line was wider than the part of
+  the screen read for the word — and Gemini then explained the word from half a sentence. Such a sentence
+  is now read whole, the way Translate reads.
 - A selected phrase is looked up without the marks around it: `__delaunay triangulation__` from Markdown
   now finds "delaunay triangulation".
 - A footnote stuck to a word — "abridged[119]" copied from Wikipedia, or "abridged119" when the screen

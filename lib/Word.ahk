@@ -69,11 +69,31 @@ WordAtPoint(mx, my) {
         edge := (i < passes.Length) ? [Round(pass.w * pass.s), Round(pass.h * pass.s)] : ""
         if (hit := PickWord(lines, (mx - rx) * pass.s, (my - ry) * pass.s, edge)) {
             k := pass.s
-            return {word: hit.word, context: hit.context
+            out := {word: hit.word, context: hit.context
                 , x: rx + hit.x / k, y: ry + hit.y / k, w: hit.w / k, h: hit.h / k}
+            if (hit.ctx && CutByBand(hit.ctx, Round(pass.w * k), Round(pass.h * k)))
+                out.context := WholeSentence(out)
+            return out
         }
     }
     return ""
+}
+
+; The band is narrower than a line of an article, so the sentence a word came
+; with can be missing its ends - and Gemini reads the meaning from it. When
+; the sentence's lines run into the band's edge, it is read again the way
+; Translate reads, from the whole monitor (Sentence.ahk), keeping to the one
+; sentence. Only then: a sentence that fits the band costs nothing more.
+CutByBand(r, bw, bh) => (r.x <= 3 || r.y <= 3 || r.x + r.w >= bw - 3 || r.y + r.h >= bh - 3)
+
+WholeSentence(hit) {
+    try {
+        full := SentenceAtPoint(Round(hit.x + hit.w / 2), Round(hit.y + hit.h / 2), false)
+        if (full && InStr(full.text, hit.word))
+            return full.text
+    } catch as e
+        VocabLog("OCR (word's sentence): " e.Message)
+    return hit.context
 }
 
 ; edge, when given, is [width, height] of the band being read: words touching
@@ -101,7 +121,7 @@ PickWord(lines, px, py, edge := "") {
     ; full stops. Whole lines dragged in the tail of the sentence before and
     ; whatever sat under it on screen - a chat's "11 minutes ago".
     ctx := BlockAt(lines, w.x + w.w / 2, w.y + w.h / 2, false)
-    return {word: word, context: ctx ? ctx.text : "", x: w.x, y: w.y, w: w.w, h: w.h}
+    return {word: word, context: ctx ? ctx.text : "", ctx: ctx, x: w.x, y: w.y, w: w.w, h: w.h}
 }
 
 ; A word or short phrase as it should be looked up: no quotes, brackets or

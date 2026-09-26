@@ -58,16 +58,18 @@ LookupSentenceUnderMouse(*) {
 ; second is just that block, enlarged by the engine's BlockScale (1.5x for
 ; Windows' reader) for the words themselves; the same sentences are then
 ; taken from it. Small print the first read misses gets the old strip.
-SentenceAtPoint(mx, my) {
+; whole := false keeps to the one sentence at the point - a looked-up word's
+; own sentence, when the word lookup's band cut it (WholeSentence, Word.ahk).
+SentenceAtPoint(mx, my, whole := true) {
     m := MonitorRectAt(mx, my)
     lines := Ocr.Screen(m[1], m[2], m[3], m[4], 1)
-    if (hit := BlockAt(lines, mx - m[1], my - m[2])) {
+    if (hit := BlockAt(lines, mx - m[1], my - m[2], whole)) {
         found := {text: hit.text, x: m[1] + hit.x, y: m[2] + hit.y, w: hit.w, h: hit.h}
         pad := 6, s := Ocr.Engine.BlockScale
         rx := m[1] + hit.bx - pad, ry := m[2] + hit.by - pad, rw := hit.bw + pad * 2, rh := hit.bh + pad * 2
         if (s <= Ocr.MaxScale(rw, rh)) {
             lines := Ocr.Screen(rx, ry, rw, rh, s)
-            if (again := BlockAt(lines, (mx - rx) * s, (my - ry) * s))
+            if (again := BlockAt(lines, (mx - rx) * s, (my - ry) * s, whole))
                 found.text := again.text
         }
         return found
@@ -77,7 +79,7 @@ SentenceAtPoint(mx, my) {
     rx := Max(vx, Min(mx - w // 2, vx + vw - w))
     ry := Max(vy, Min(my - h // 2, vy + vh - h))
     lines := Ocr.Screen(rx, ry, w, h, s)
-    if (hit := BlockAt(lines, (mx - rx) * s, (my - ry) * s))
+    if (hit := BlockAt(lines, (mx - rx) * s, (my - ry) * s, whole))
         return {text: hit.text, x: rx + hit.x / s, y: ry + hit.y / s, w: hit.w / s, h: hit.h / s}
     return ""
 }

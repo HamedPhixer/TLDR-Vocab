@@ -71,6 +71,16 @@ Check("word: the word", w ? w.word : "", "nodded")
 Check("word: its example sentence", w ? w.context : "", "The guard nodded: he had seen the letter before.")
 CheckTrue("word: under half a second", ms < 500, ms " ms")
 
+; a word in a line far wider than the band it is read in: its sentence comes
+; whole, from the whole monitor, not with its ends cut off
+t0 := A_TickCount
+w := WordAtPoint(OX + 640, OY + 290)
+ms := A_TickCount - t0
+ctx := w ? w.context : ""
+CheckTrue("word: a sentence wider than the band comes whole"
+    , RegExMatch(ctx, "^This long paragraph goes on and on, sentence \d of seven, so it is well over any limit\.$"), ctx)
+CheckTrue("word: ...still quick", ms < 1500, ms " ms")
+
 CheckHas("box: reads what is inside", Box.TextIn(OX + 795, OY + 395, 510, 60), "The guard nodded", "not even the captain")
 
 g.Destroy()
