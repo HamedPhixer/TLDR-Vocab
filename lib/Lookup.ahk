@@ -1226,15 +1226,18 @@ class AiTrack extends Track {
     }
 
     ; A note, a blog paragraph, a page of patch notes: what does it actually
-    ; say. Short, and in both languages.
+    ; say. Short, and in both languages - a little longer for a long text.
     static ParagraphPrompt(lk) {
+        size := (StrLen(lk.word) > SummaryLongChars())
+            ? "five or six short sentences, so its main points are all there"
+            : "two or three short sentences"
         return "You help a native " Lang.PromptName() " speaker who is learning English.`n`n"
             . "This text was read off their screen, so it may contain recognition errors, and"
             . " lines belonging to other things on screen may have crept in:`n"
             . Chr(34) lk.word Chr(34) "`n`n"
             . "Reply with JSON only, with exactly these keys:`n"
             . '{"summary": "", "translation": "", "note": ""}' "`n`n"
-            . "summary: what this text says, in simple English, two or three short sentences."
+            . "summary: what this text says, in simple English, " size "."
             . " Ignore anything that clearly belongs to something else on the screen`n"
             . "translation: the same summary in natural " Lang.PromptName() "`n"
             . "note: a name, a term or a reference worth a few words; otherwise empty"

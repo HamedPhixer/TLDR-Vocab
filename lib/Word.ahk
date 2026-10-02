@@ -33,13 +33,12 @@ LookupSelection(*) {
     text := ClipWait(0.6) ? A_Clipboard : ""
     A_Clipboard := saved
     saved := ""
-    text := Trim(RegExReplace(text, "\s+", " "))
+    got := CutAtLine(Trim(text))        ; the summary's own limit, at the end of a line
+    text := Trim(RegExReplace(got.text, "\s+", " "))
     if (text = "") {
         LookupUnderMouse()
         return
     }
-    if (StrLen(text) > 3000)            ; the paragraph lookup's own limit
-        text := SubStr(text, 1, 3000)
     ; Any length, sent where it fits: a few words to the dictionary, a
     ; sentence or a short run of them to the sentence card (explained and
     ; translated), anything longer to the paragraph card (summarised) - the
@@ -50,7 +49,7 @@ LookupSelection(*) {
         Popup.Message("No word in the selection", mx, my)
         return
     }
-    StartLookup(text, "", Popup, {x: mx, y: my - 10, w: 1, h: 20}, false, mode)
+    StartLookup(text, "", Popup, {x: mx, y: my - 10, w: 1, h: 20, cut: got.cut}, false, mode)
 }
 
 ; OCR a band around the pointer and take the word it is on - or nearly on.

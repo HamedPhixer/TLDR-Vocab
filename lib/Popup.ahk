@@ -45,7 +45,8 @@ class PopupCard {
         this.Stop()
         this.st := {word: word, context: context, lk: "", choice: "", userChose: false
             , expanded: false, flash: "", maxSenses: 40, lockH: 0
-            , ocr: ocr, misread: this.misread, fixed: false, mode: mode}
+            , ocr: ocr, misread: this.misread, fixed: false, mode: mode
+            , cut: IsObject(anchor) && anchor.HasProp("cut") && anchor.cut}     ; the text was too long - see Paragraph.ahk
         this.misread := ""
         this.anchor := anchor
         this.Plan((mode = "paragraph") ? PopWide : PopW)

@@ -72,6 +72,25 @@ CheckTrue("line runs on: stop mid-line only", !EndsText(RowOf("bleh bleh.bleh"))
 r3 := [{text: "one", y1: 0, y2: 20, h: 20}, {text: "two", y1: 24, y2: 44, h: 20}, {text: "three", y1: 80, y2: 100, h: 20}]
 Check("lines: paragraph gap becomes a new line", JoinRows(r3), "one two`nthree")
 
+;--- summary: how much it takes, and how long it answers ------------------------
+got := CutAtLine("short text", 100)
+CheckTrue("summary cut: short text is left alone", got.text = "short text" && !got.cut)
+lines := "first line of the note`r`nsecond line of the note`r`nthird line"
+got := CutAtLine(lines, 50)
+CheckTrue("summary cut: at the end of a line", got.text = "first line of the note`r`nsecond line of the note" && got.cut, got.text)
+got := CutAtLine("One sentence here. Another sentence goes on and on and on", 30)
+Check("summary cut: no line break, at a sentence", got.text, "One sentence here.")
+got := CutAtLine("words and more words without any stop at all", 20)
+Check("summary cut: else at a space", got.text, "words and more words")
+rows := [{text: "aaaa"}, {text: "bbbb"}, {text: "cccc"}]
+Check("summary rows: whole rows that fit", LastRowWithin(rows, 1, 3, 9), 2)
+Check("summary rows: all of them", LastRowWithin(rows, 1, 3, 14), 3)
+Check("summary rows: at least one", LastRowWithin(rows, 1, 3, 2), 1)
+fake := {mode: "paragraph", word: "A short note."}
+CheckHas("summary prompt: short text, short summary", AiTrack.Prompt(fake), "two or three short sentences")
+fake.word := StrReplace(Format("{:" SummaryLongChars() + 1 "}", ""), " ", "x")
+CheckHas("summary prompt: long text, longer summary", AiTrack.Prompt(fake), "five or six short sentences")
+
 ;--- the popup stays on the screen ---------------------------------------------
 wa := WorkAreaAt(100, 100)
 cases := [["big block", {x: wa[1] + 20, y: wa[2] + 20, w: wa[3] - wa[1] - 40, h: wa[4] - wa[2] - 40}, "over"]

@@ -129,7 +129,8 @@ class Box {
     ; Reading it
     ;----------------------------------------------------------------------------
     static Read(x, y, w, h) {
-        try text := Box.TextIn(x, y, w, h)
+        cut := false
+        try text := Box.TextIn(x, y, w, h, &cut)
         catch as e {
             VocabLog("OCR (box): " e.Message)
             Popup.Message("Could not read the screen: " e.Message, x, y + h)
@@ -140,8 +141,6 @@ class Box {
             return
         }
         Outline.Flash(x - 3, y - 3, w + 6, h + 6)
-        if (StrLen(text) > 3000)                ; the paragraph lookup's own limit
-            text := SubStr(text, 1, 3000)
         n := CountWords(text)
         mode := (n <= 4) ? "word" : (n <= SentenceMaxWords()) ? "sentence" : "paragraph"
         if (mode != "paragraph")
@@ -151,20 +150,25 @@ class Box {
             return
         }
         ; the popup keeps clear of the box if it can - see Popup.Plan
-        StartLookup(text, "", Popup, {x: x, y: y, w: w, h: h}, mode = "word", mode)
+        StartLookup(text, "", Popup, {x: x, y: y, w: w, h: h, cut: cut}, mode = "word", mode)
     }
 
     ; The text in the box, top to bottom. How much to enlarge follows the box's
     ; height - a box drawn around one line is only a little taller than its
     ; text - for the reason WinOcr.WordPasses explains: enlarging helps small
     ; text and ruins big text. The first reading that finds anything is used.
-    static TextIn(x, y, w, h) {
+    ; No more than a summary takes (SummaryMaxChars), whole lines; cut says
+    ; some were left out.
+    static TextIn(x, y, w, h, &cut := false) {
         for s in Ocr.Engine.BoxScales(h) {
             ; everything in the box, top to bottom; a paragraph gap is kept as
             ; a line break for the Summary card (see Lines.ahk)
             rows := PageRows(Ocr.Screen(x, y, w, h, s))
-            if rows.Length
-                return JoinRows(rows)
+            if rows.Length {
+                last := LastRowWithin(rows, 1, rows.Length)
+                cut := last < rows.Length
+                return JoinRows(rows, 1, last)
+            }
         }
         return ""
     }

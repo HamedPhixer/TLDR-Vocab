@@ -4,7 +4,12 @@
 ; The SUMMARY card; the code calls it "paragraph".
 ; Ctrl + Win + Click anywhere in a block of text: a game's lore note, a blog
 ; paragraph, a wall of patch notes. It comes back as two or three sentences of
-; plain English and the same translated.
+; plain English and the same translated - five or six for a long text.
+;
+; HOW MUCH IT TAKES
+; At most SummaryMaxChars (about 1300 words), from every way in: the click,
+; the selection and the box. Longer text is cut at the end of a line, never
+; mid-word, and the card says only the first part was summarised.
 ;
 ; WHY IT READS THE WHOLE MONITOR
 ; A strip around the pointer cannot work here: make it big enough for three
@@ -31,6 +36,36 @@
 ;================================================================================
 #Requires AutoHotkey v2.0
 
+SummaryMaxChars() => 8000
+; past this a text gets the longer summary - see AiTrack.ParagraphPrompt
+SummaryLongChars() => 1500
+
+; Text over the limit, cut at the end of a line: the last line break that keeps
+; at least half of it, else the end of a sentence, else a space. Returns
+; {text, cut}.
+CutAtLine(text, limit := SummaryMaxChars()) {
+    if (StrLen(text) <= limit)
+        return {text: text, cut: false}
+    head := SubStr(text, 1, limit + 1)        ; + 1: a break just past the limit still counts
+    for pat in ["s)^.*\R", "s)^.*[.!?][\x22\x27)\]]*\s", "s)^.*\s"]
+        if (RegExMatch(head, pat, &m) && m.Len >= limit / 2)
+            return {text: RTrim(m[0], " `t`r`n"), cut: true}
+    return {text: SubStr(text, 1, limit), cut: true}
+}
+
+; The last row from first on whose text still fits in limit characters - at
+; least first itself.
+LastRowWithin(rows, first, last, limit := SummaryMaxChars()) {
+    chars := 0
+    loop last - first + 1 {
+        i := first + A_Index - 1
+        chars += StrLen(rows[i].text) + 1
+        if (chars > limit + 1)
+            return Max(first, i - 1)
+    }
+    return last
+}
+
 LookupParagraphUnderMouse(*) {
     MouseGetPos(&mx, &my)
     if Popup.visible {
@@ -48,7 +83,7 @@ LookupParagraphUnderMouse(*) {
         return
     }
     Outline.Flash(hit.x, hit.y, hit.w, hit.h)
-    StartLookup(hit.text, "", Popup, hit, false, "paragraph")
+    StartLookup(hit.text, "", Popup, hit, false, "paragraph")      ; hit.cut: see RenderParagraph
 }
 
 ; Like Translate, two reads: the whole monitor at its own size to find the
@@ -61,13 +96,13 @@ ParagraphAtPoint(mx, my) {
     block := BlockAround(lines, mx - m[1], my - m[2])
     if !block
         return ""
-    found := {text: block.text, x: m[1] + block.x, y: m[2] + block.y, w: block.w, h: block.h}
+    found := {text: block.text, x: m[1] + block.x, y: m[2] + block.y, w: block.w, h: block.h, cut: block.cut}
     s := Ocr.Engine.BlockScale
     if (s <= Ocr.MaxScale(found.w, found.h)) {
         lines := Ocr.Screen(found.x, found.y, found.w, found.h, s)
         again := BlockAround(lines, (mx - found.x) * s, (my - found.y) * s)
         if (again && StrLen(again.text) >= StrLen(found.text) * 0.8)
-            found.text := again.text
+            found.text := again.text, found.cut := found.cut || again.cut
     }
     return found
 }
@@ -95,22 +130,16 @@ BlockAround(lines, px, py) {
     while (last < rows.Length && SameFlow(rows[last], rows[last + 1]))
         last++
 
-    ; at most about 3000 characters, the most a summary is asked for
-    chars := 0
-    loop last - first + 1 {
-        chars += StrLen(rows[first + A_Index - 1].text) + 1
-        if (chars > 3000) {
-            last := first + A_Index - 1
-            break
-        }
-    }
+    ; no more than a summary is asked for, whole lines
+    whole := last, last := LastRowWithin(rows, first, last)
     x1 := 1e9, y1 := 1e9, x2 := -1e9, y2 := -1e9
     loop last - first + 1 {
         r := rows[first + A_Index - 1]
         x1 := Min(x1, r.x1), y1 := Min(y1, r.y1), x2 := Max(x2, r.x2), y2 := Max(y2, r.y2)
     }
     pad := 6
-    return {text: JoinRows(rows, first, last), x: x1 - pad, y: y1 - pad, w: x2 - x1 + pad * 2, h: y2 - y1 + pad * 2}
+    return {text: JoinRows(rows, first, last), x: x1 - pad, y: y1 - pad, w: x2 - x1 + pad * 2, h: y2 - y1 + pad * 2
+        , cut: last < whole}
 }
 
 ; Consecutive lines of one flow of text. The gap allowance is generous - three
@@ -186,6 +215,9 @@ RenderParagraph(g, W, st, owner) {
         NoKeyLine(f, lk)
     else
         f.Text("Gemini: " lk.ai.note, CDim, "s8 Norm Italic")
+    ; too long a text was cut at SummaryMaxChars - say so where the summary is
+    if (st.HasProp("cut") && st.cut)
+        f.Text("The text was long: this covers only its first part, down to the end of WHAT IT READ.", CAmber, "s8 Norm")
 
     f.Label(Lang.Label())
     if (ai && Dig(ai, "persian") != "")
