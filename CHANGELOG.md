@@ -2,6 +2,15 @@
 
 Each version's notes. The release on GitHub is built from the section with its number.
 
+## 1.2.2 — 2026-10-02
+
+### Fixed
+
+- **Long texts are summarised properly.** Summary now takes up to about 1300 words (it was about 500),
+  and a long text gets five or six sentences instead of two or three.
+- **When a text is too long, the card says so**: only its first part was summarised.
+- **The selection and the box cut a long text at the end of a line**, never in the middle of a word.
+
 ## 1.2.1 — 2026-09-26
 
 ### Changed
