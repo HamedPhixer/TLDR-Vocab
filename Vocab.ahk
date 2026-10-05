@@ -33,7 +33,9 @@
 ;                       mouse
 ;   Shift + Win + `     draw a box over any text and let go: only what is
 ;                       inside is read, and sent where it fits by its length,
-;                       like the selection. See Box.ahk
+;                       like the selection. The screen freezes when the
+;                       key is pressed, so a tooltip that goes when the
+;                       mouse moves can still be boxed. See Box.ahk
 ;   Win + F7            the dictionary window, open or closed
 ;   Esc                 closes the lookup popup, while one is showing
 ;

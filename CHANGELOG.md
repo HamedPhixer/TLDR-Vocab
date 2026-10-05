@@ -2,6 +2,14 @@
 
 Each version's notes. The release on GitHub is built from the section with its number.
 
+## 1.2.3 — not released yet
+
+### Changed
+
+- **The box freezes the screen when you press its key.** A tooltip that disappears as soon as the mouse moves —
+  in a game, say — stays in the picture, so you can draw the box around it. The picture is kept only in memory
+  while you draw and is gone once the box is read: nothing is saved, and the clipboard is not touched.
+
 ## 1.2.2 — 2026-10-02
 
 ### Fixed

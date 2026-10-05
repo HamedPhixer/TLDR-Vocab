@@ -83,6 +83,17 @@ CheckTrue("word: ...still quick", ms < 1500, ms " ms")
 
 CheckHas("box: reads what is inside", Box.TextIn(OX + 795, OY + 395, 510, 60), "The guard nodded", "not even the captain")
 
+; the frozen screen: the picture is taken, then the text goes away - like a
+; tooltip when the mouse moves - and the box still reads it from the picture
+shot := Ocr.Shot()
+g.Hide()
+Sleep 150
+CheckHas("box: reads the screen as it was when the key was pressed"
+    , shot ? Box.TextIn(OX + 795, OY + 395, 510, 60, , shot) : "(no picture)", "The guard nodded", "not even the captain")
+CheckTrue("box: ...the text really was gone from the live screen", !InStr(Box.TextIn(OX + 795, OY + 395, 510, 60), "guard nodded"))
+if shot
+    DllCall("DeleteObject", "ptr", shot.hbm)
+
 g.Destroy()
 
 ; pinning: a real card, pinned, then a second one beside it (no lookup is

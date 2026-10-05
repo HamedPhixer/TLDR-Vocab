@@ -9,6 +9,10 @@
 ;                                  with boxes in the pixels of the rectangle
 ;                                  AS ENLARGED BY scale - always, even when
 ;                                  the engine could not take it that big
+;   Ocr.Screen(..., scale, shot)   the same rectangle, but out of a picture of
+;                                  the screen taken earlier (Ocr.Shot)
+;   Ocr.Shot()                     the whole screen as it is right now, kept
+;                                  in memory - the box's frozen screen
 ;   Ocr.MaxScale(w, h)             the most a w x h rectangle can be enlarged
 ;   Ocr.Engine                     the engine, for its measured settings:
 ;                                  WordPasses, BlockScale, BoxScales(h)
@@ -48,9 +52,9 @@ class Ocr {
 
     ; What the rest of the app calls: read a screen rectangle, enlarged by
     ; scale, and hand back its lines.
-    static Screen(x, y, w, h, scale := 1) {
+    static Screen(x, y, w, h, scale := 1, shot := "") {
         s := Min(scale, Ocr.MaxScale(w, h))
-        hbm := Ocr.Capture(x, y, w, h, s)
+        hbm := Ocr.Capture(x, y, w, h, s, shot)
         try lines := Ocr.Engine.Read(hbm)
         finally DllCall("DeleteObject", "ptr", hbm)
         if (s != scale)             ; read smaller than asked: boxes back to the size asked for
@@ -66,20 +70,43 @@ class Ocr {
     static Read(hBitmap) => Ocr.Engine.Read(hBitmap)
 
     ; screen rectangle -> HBITMAP, enlarged by scale. The caller deletes it.
-    static Capture(x, y, w, h, scale := 1) {
+    ; With a shot from Ocr.Shot the rectangle is cut out of that picture
+    ; instead of the screen as it is now. 0 if Windows could not make the
+    ; bitmap (one the size of every monitor together, say).
+    static Capture(x, y, w, h, scale := 1, shot := "") {
         sw := Round(w * scale), sh := Round(h * scale)
         sdc := DllCall("GetDC", "ptr", 0, "ptr")
         mdc := DllCall("CreateCompatibleDC", "ptr", sdc, "ptr")
         hbm := DllCall("CreateCompatibleBitmap", "ptr", sdc, "int", sw, "int", sh, "ptr")
         old := DllCall("SelectObject", "ptr", mdc, "ptr", hbm, "ptr")
+        src := sdc
+        if shot {
+            src := DllCall("CreateCompatibleDC", "ptr", sdc, "ptr")
+            srcOld := DllCall("SelectObject", "ptr", src, "ptr", shot.hbm, "ptr")
+            x -= shot.x, y -= shot.y
+        }
         DllCall("SetStretchBltMode", "ptr", mdc, "int", 4)             ; HALFTONE - smooth, not blocky
         DllCall("SetBrushOrgEx", "ptr", mdc, "int", 0, "int", 0, "ptr", 0)
         DllCall("StretchBlt", "ptr", mdc, "int", 0, "int", 0, "int", sw, "int", sh
-            , "ptr", sdc, "int", x, "int", y, "int", w, "int", h, "uint", 0x00CC0020)
+            , "ptr", src, "int", x, "int", y, "int", w, "int", h, "uint", 0x00CC0020)
+        if shot {
+            DllCall("SelectObject", "ptr", src, "ptr", srcOld)
+            DllCall("DeleteDC", "ptr", src)
+        }
         DllCall("SelectObject", "ptr", mdc, "ptr", old)
         DllCall("DeleteDC", "ptr", mdc)
         DllCall("ReleaseDC", "ptr", 0, "ptr", sdc)
         return hbm
+    }
+
+    ; The whole screen, every monitor, as it is right now -> {hbm, x, y}, x
+    ; and y being where its top-left corner is on the screen; "" if Windows
+    ; could not make a bitmap that big. Only in memory, never a file. The
+    ; caller deletes hbm - or hands it to a window that does (see Box.Begin).
+    static Shot() {
+        vx := SysGet(76), vy := SysGet(77)
+        hbm := Ocr.Capture(vx, vy, SysGet(78), SysGet(79))
+        return hbm ? {hbm: hbm, x: vx, y: vy} : ""
     }
 
     static Rescale(lines, k) {

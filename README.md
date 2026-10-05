@@ -34,7 +34,7 @@ All of them can be changed — or switched off — in Settings.
 | **Shift + Win + Click** | **Translate a passage**: the sentences around the one you click, explained in plain English and translated — up to ten, stopping at a line that ends with `. ! ? : ;`. Or only the sentence you click: Settings → Translation. |
 | **Ctrl + Win + Click** | **Summary**: the whole block of text under the mouse, summarised in both languages — a game note, a blog post. |
 | **Win + `** | Whatever text is selected (\` is the key left of 1). |
-| **Shift + Win + `** | Draw a box: the screen dims, drag a rectangle over the text, let go. Only what is inside is read. |
+| **Shift + Win + `** | Draw a box: the screen freezes and dims, drag a rectangle over the text, let go. Only what is inside is read — and since the screen froze when you pressed the key, a tooltip that vanishes when the mouse moves is still there to box. |
 | **Win + F7** | Your saved word list. |
 | **Esc** | Closes the card. A click outside it does too. |
 
