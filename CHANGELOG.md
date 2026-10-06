@@ -2,22 +2,30 @@
 
 Each version's notes. The release on GitHub is built from the section with its number.
 
-## 1.2.3 — not released yet
+## 1.2.3 — 2026-10-06
 
 ### Changed
 
-- **The box freezes the screen when you press its key.** A tooltip that disappears as soon as the mouse moves —
-  in a game, say — stays in the picture, so you can draw the box around it. The picture is kept only in memory
-  while you draw and is gone once the box is read: nothing is saved, and the clipboard is not touched.
-
-## 1.2.2 — 2026-10-02
+- **The box freezes the screen when you press its key**, so a tooltip that vanishes when the mouse moves stays
+  put while you draw. Nothing is saved.
+- **Gemini uses its Flash models more.** The newest, busiest Flash is no longer first. A busy or slow one
+  (no answer in 15 s) is skipped for two hours, and the next Flash steps in.
 
 ### Fixed
 
-- **Long texts are summarised properly.** Summary now takes up to about 1300 words (it was about 500),
-  and a long text gets five or six sentences instead of two or three.
+- **No more stray English letters in Gemini's Persian.** A broken half-space is fixed; a garbled word falls
+  back to the translator's line.
+
+## 1.2.2 — 2026-10-02
+
+<details>
+<summary><b>Fixed</b> (3)</summary>
+
+- **Long texts are summarised properly.** Summary now takes up to about 1300 words (it was about 500), and a long text gets five or six sentences instead of two or three.
 - **When a text is too long, the card says so**: only its first part was summarised.
 - **The selection and the box cut a long text at the end of a line**, never in the middle of a word.
+
+</details>
 
 ## 1.2.1 — 2026-09-26
 

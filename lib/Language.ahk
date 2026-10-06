@@ -5,7 +5,8 @@
 ; (Settings > TRANSLATION, kept in Vocab.ini as [Translation] Language=fa).
 ; Everything that depends on it asks here, so no other file names a language:
 ;   the translators     Lang.Code(), and Lingva's own code where it differs
-;   Gemini's prompts    Lang.PromptName()
+;   Gemini              Lang.PromptName() for the prompts, Lang.Mend() for
+;                       the answers
 ;   the cards           Lang.Label() for the heading, Lang.Rtl() for the
 ;                       right-to-left layout, Lang.Sep() between terms
 ;   the cache           Lang.CacheKind(): one cache entry per language
@@ -71,9 +72,27 @@ class Lang {
     static Label(code := "") => StrUpper(((code != "") ? Lang.Find(code) : Lang.Cur()).name)
     static Rtl(code := "") => ((code != "") ? Lang.Find(code) : Lang.Cur()).HasProp("rtl")
 
+    ; the languages written in Arabic letters
+    static Arabic(code := "") => InStr(" fa ar ur ", " " ((code != "") ? code : Lang.Code()) " ")
+
     ; what goes between two terms: the Arabic comma for the languages that
     ; use it, a plain one for the rest
-    static Sep(code := "") => InStr(" fa ar ur ", " " ((code != "") ? code : Lang.Code()) " ") ? Chr(0x060C) " " : ", "
+    static Sep(code := "") => Lang.Arabic(code) ? Chr(0x060C) " " : ", "
+
+    ; Gemini - Flash-Lite above all - sometimes writes a Latin letter where
+    ; the half-space (ZWNJ) between two Arabic letters belongs: charbi S ash
+    ; for charbi-ash. A single letter there is put back as the half-space.
+    ; Any other Latin letter straight after an Arabic one is a word gone
+    ; wrong - ch us p charani for chashm-charani, h al for the name Hal: then
+    ; "", and the card shows the translator's line instead. Latin BEFORE an
+    ; Arabic letter is left alone: Persian writes "APIha" that way.
+    static Letter := "[\x{0620}-\x{064A}\x{066E}-\x{06D3}\x{06FA}-\x{06FF}]"
+    static Mend(s) {
+        if !Lang.Arabic()
+            return s
+        s := RegExReplace(s, "(?<=" Lang.Letter ")\x{200C}?[A-Za-z]\x{200C}?(?=" Lang.Letter ")", Chr(0x200C))
+        return RegExMatch(s, Lang.Letter "\x{200C}?[A-Za-z]") ? "" : s
+    }
 
     ; Persian keeps the cache name it always had, so words looked up before
     ; there was a choice are still found

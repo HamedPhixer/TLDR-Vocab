@@ -138,6 +138,32 @@ reply := {text: Json.Dump(Map("candidates", [Map("content", Map("parts", [part])
 got := AiTrack.Answer("sentence", reply)
 Check("language: Gemini's translation is filed as before", got ? got["persian"] : "", "Es rojo.")
 
+; a Latin letter where Gemini meant a half-space (Persian letters by code, so
+; this file stays plain ASCII)
+Letters(codes*) {
+    s := ""
+    for c in codes
+        s .= Chr(c)
+    return s
+}
+charbi := Letters(0x0686, 0x0631, 0x0628, 0x06CC), ash := Letters(0x0627, 0x0634), zw := Chr(0x200C)
+broken := Letters(0x0686) "us" Letters(0x067E, 0x0686, 0x0631, 0x0627, 0x0646, 0x06CC)
+Lang.current := Lang.Find("fa")
+Check("persian: a stray letter becomes the half-space", Lang.Mend(charbi "S" ash), charbi zw ash)
+Check("persian: ...also when it sits next to one", Lang.Mend(charbi zw "S" ash), charbi zw ash)
+Check("persian: a correct half-space is left alone", Lang.Mend(charbi zw ash), charbi zw ash)
+Check("persian: English beside Persian is left alone", Lang.Mend("API " charbi " (S) " ash), "API " charbi " (S) " ash)
+Check("persian: a Persian ending on English is left alone", Lang.Mend("API" ash), "API" ash)
+Check("persian: letters lost inside a word - dropped", Lang.Mend(broken " " ash), "")
+Check("persian: a name half in Latin - dropped", Lang.Mend(Letters(0x062D) "al " charbi), "")
+answer := '{"simple": "Watching.", "translation": "' broken '", "fixed": "", "note": ""}'
+part["text"] := answer
+got := AiTrack.Answer("sentence", {text: Json.Dump(Map("candidates", [Map("content", Map("parts", [part]))]))})
+Check("persian: ...so the card shows the translator's line", got ? got["simple"] "|" got["persian"] : "", "Watching.|")
+Lang.current := Lang.Find("es")
+Check("persian: other languages are not touched", Lang.Mend(charbi "S" ash), charbi "S" ash)
+Lang.current := saved
+
 ;--- pinning -------------------------------------------------------------------
 Check("pin: none on the word list", PinAction(Dict), "")
 CheckTrue("pin: a popup has one", IsObject(PinAction(Popup)))
@@ -279,33 +305,6 @@ Check("update: a day GitHub was not reached is not marked checked"
 Check("network error: no double brackets",Http.Short("(0x80072EFD)"), "0x80072EFD")
 Check("network error: the text kept", Http.Short("0x80072EE2 - The operation timed out`r`n"), "The operation timed out")
 
-;--- a request that hangs gets a second copy -----------------------------------
-; StallServer.ps1 never answers the first connection and answers the second
-; at once: the step must take the second copy's answer soon after its hedge
-class HedgeTest extends Track {
-    Start() {
-        this.steps := [{name: "stalling server", url: "http://127.0.0.1:18765/", hedge: 700
-            , opts: {timeout: 8000}, parse: (r) => r.text}]
-    }
-}
-IniWrite("none", VocabIni(), "Network", "Proxy")
-ready := A_Temp "\vocab-stall-ready.txt"
-try FileDelete(ready)
-Run('powershell -NoProfile -ExecutionPolicy Bypass -File "' A_ScriptDir '\StallServer.ps1" -Port 18765 -Ready "' ready '"', , "Hide")
-start := A_TickCount
-while (!FileExist(ready) && A_TickCount - start < 15000)
-    Sleep(50)
-t := HedgeTest({query: "hedge"})
-start := A_TickCount
-while (!t.done && A_TickCount - start < 10000) {
-    t.Step()
-    Sleep(50)
-}
-IniDelete(VocabIni(), "Network", "Proxy")
-Check("hedge: a stuck request is answered by its second copy", t.data, "second")
-CheckTrue("hedge: ...soon after the hedge, not at the timeout", A_TickCount - start < 3000, (A_TickCount - start) " ms")
-CheckTrue("hedge: ...and it says it asked again", t.again)
-
 ;--- OCR: any engine, even one that cannot take the size asked for --------------
 ; A stand-in engine that reads at most 100 px and "finds" one word at a fixed
 ; place in whatever bitmap it gets: the boxes must come back in the frame
@@ -331,7 +330,7 @@ CheckTrue("ocr: Windows' engine is the one in use", Ocr.Engine.Name = "Windows O
 ;--- Gemini: what happens after a failed request (no network: answers are faked)
 IniWrite("test-key", VocabIni(), "Gemini", "ApiKey")
 try FileDelete(AiTrack.StateFile)
-AiTrack.chain := ["model-a", "model-b"], AiTrack.good := ""
+AiTrack.chain := ["model-a", "model-b"]
 AiTrack.loaded := true, AiTrack.listed := FormatTime(, "yyyyMMdd")    ; no list request
 Fail(err, status := 0) => {err: err, status: status, text: "", Ok: false, Why: (err != "") ? err : "HTTP " status}
 t := AiTrack({word: "bank", context: "", mode: "word"})
@@ -362,6 +361,90 @@ CheckTrue("gemini: out of time - stops and says so", t.done && InStr(t.note, "lo
 CheckHas("gemini: 2.5 models think a little", t.GenStep("gemini-2.5-flash").opts.body, '"thinkingBudget":512')
 CheckHas("gemini: 3.x models think low", t.GenStep("gemini-3-flash").opts.body, '"thinkingLevel":"low"')
 
+; no answer in time: the next model, and this one rests - unless the lookup's
+; own time cut its wait short
+AiTrack.resting := Map()
+t := AiTrack({word: "bank", context: "", mode: "word"})
+Check("gemini: a model gets 15 s", t.steps[1].opts.timeout, AiTrack.Wait)
+t.Got(t.steps[1], Fail("timed out"), "")
+Check("gemini: silent for all of it - the next model", t.steps[1].model, "model-b")
+CheckHas("gemini: ...and the card says so", t.Waiting, "model-a did not answer in time, trying model-b")
+secs := DateDiff(AiTrack.resting.Has("model-a") ? AiTrack.resting["model-a"] : A_NowUTC, A_NowUTC, "Seconds")
+CheckTrue("gemini: ...and it rests two hours", secs >= 7199 && secs <= 7201, secs " s")
+CheckHas("gemini: ...which the next lookup explains", AiTrack.Why("model-a")
+    , "model-a is busy or slow (skipped until " AiTrack.LocalTime(AiTrack.resting["model-a"]) ")")
+AiTrack.resting := Map()
+t := AiTrack({word: "bank", context: "", mode: "word"})
+t.t0 := A_TickCount - 20000
+short := t.GenStep("model-a")
+CheckTrue("gemini: 10 s left - a shorter wait", short.opts.timeout < AiTrack.Wait, short.opts.timeout)
+t.Got(short, Fail("timed out"), "")
+CheckTrue("gemini: ...and no rest when it runs out", !AiTrack.resting.Has("model-a"))
+
+; a resting model that answers - asked because all were resting - rests no more
+AiTrack.resting := Map("model-a", DateAdd(A_NowUTC, 3600, "Seconds"), "model-b", DateAdd(A_NowUTC, 3600, "Seconds"))
+t := AiTrack({word: "bank", context: "", mode: "word"})
+t.Got(t.steps[1], {err: "", status: 200, text: "", Ok: true, Why: "HTTP 200"}, Map("meaning", "the side of a river"))
+CheckTrue("gemini: a resting model that answers rests no more", t.done && !AiTrack.IsResting("model-a"))
+CheckTrue("gemini: ...the others still do", AiTrack.IsResting("model-b"))
+AiTrack.resting := Map()
+
+; the order: the second-newest Flash, two Flash-Lite, then the other Flash -
+; the newest last
+Listed(names*) {
+    ms := []
+    for n in names
+        ms.Push(Map("name", "models/" n, "supportedGenerationMethods", ["generateContent"]))
+    ms.Push(Map("name", "models/gemini-3.9-flash-image", "supportedGenerationMethods", ["generateContent"]))
+    return {text: Json.Dump(Map("models", ms))}
+}
+Check("gemini: the second-newest Flash first, the newest last"
+    , Join(AiTrack.PickModels(Listed("gemini-3.6-flash", "gemini-3.8-flash", "gemini-3.7-flash"
+        , "gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-2.5-flash-lite")), ",")
+    , "gemini-3.7-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.6-flash,gemini-3.8-flash"
+    . ",gemini-flash-latest,gemini-flash-lite-latest")
+Check("gemini: one Flash - it leads", Join(AiTrack.PickModels(Listed("gemini-3.8-flash", "gemini-3.5-flash-lite")), ",")
+    , "gemini-3.8-flash,gemini-3.5-flash-lite,gemini-flash-latest,gemini-flash-lite-latest")
+Check("gemini: no Flash - Flash-Lite leads", Join(AiTrack.PickModels(Listed("gemini-3.5-flash-lite")), ",")
+    , "gemini-3.5-flash-lite,gemini-flash-latest,gemini-flash-lite-latest")
+
+; one Flash leads each lookup: a resting Flash hands its place to the next
+; Flash, not to Flash-Lite (names in short: F2 = second-newest Flash, ...)
+AiTrack.chain := AiTrack.PickModels(Listed("gemini-3.6-flash", "gemini-3.8-flash", "gemini-3.7-flash"
+    , "gemini-3.1-flash-lite", "gemini-3.5-flash-lite"))
+F1 := "gemini-3.8-flash", F2 := "gemini-3.7-flash", F3 := "gemini-3.6-flash"
+L1 := "gemini-3.5-flash-lite", L2 := "gemini-3.1-flash-lite"
+later := DateAdd(A_NowUTC, 3600, "Seconds")
+Check("gemini: nothing resting - the second-newest Flash leads", AiTrack.Models()[1], F2)
+AiTrack.resting := Map(F2, later)
+Check("gemini: it rests - the next Flash takes its place", Join(AiTrack.Models(), ",")
+    , Join([F3, L1, L2, F1, "gemini-flash-latest", "gemini-flash-lite-latest", F2], ","))
+AiTrack.resting := Map(F2, later, F3, later)
+Check("gemini: two rest - the newest Flash leads", AiTrack.Models()[1], F1)
+AiTrack.resting := Map(F2, later, F3, later, F1, later)
+Check("gemini: all Flash rest - Flash-Lite leads", AiTrack.Models()[1], L1)
+
+; a Flash that says no at once: another Flash, if there is time for it and
+; Flash-Lite after it; a Flash that is slow: Flash-Lite
+AiTrack.resting := Map()
+t := AiTrack({word: "bank", context: "", mode: "word"})
+t.Got(t.steps[1], Fail("", 503), "")
+Check("gemini: a Flash busy at once - another Flash", t.steps[1].model, F3)
+CheckHas("gemini: ...and the card says so", t.Waiting, "3.7 Flash is busy or slow (skipped until ")
+CheckHas("gemini: ...and which", t.Waiting, "), trying 3.6 Flash")
+t.Got(t.steps[1], Fail("timed out"), "")
+Check("gemini: that one slow - Flash-Lite, not a third Flash", t.steps[1].model, L1)
+AiTrack.resting := Map()
+t := AiTrack({word: "bank", context: "", mode: "word"})
+t.t0 := A_TickCount - 8000
+t.Got(t.steps[1], Fail("", 503), "")
+Check("gemini: busy at once, but too little time for another Flash - Flash-Lite", t.steps[1].model, L1)
+AiTrack.resting := Map()
+t := AiTrack({word: "bank", context: "", mode: "word"})
+t.Got(t.steps[1], Fail("timed out"), "")
+Check("gemini: the leading Flash slow - Flash-Lite", t.steps[1].model, L1)
+AiTrack.chain := ["model-a", "model-b"], AiTrack.resting := Map()
+
 ; how long a model rests: the 429 says which quota ran out
 Check("gemini: quota day - summer, afternoon in California", AiTrack.NextQuotaDay("20260926200000"), "20260927070000")
 Check("gemini: quota day - a second before it starts", AiTrack.NextQuotaDay("20260927065959"), "20260927070000")
@@ -377,7 +460,7 @@ Check("gemini: out of the day's quota - rests until the quota day", AiTrack.Rest
 secs := DateDiff(AiTrack.RestUntil(Quota("GenerateRequestsPerMinutePerProjectPerModel-FreeTier", "34s")), A_NowUTC, "Seconds")
 CheckTrue("gemini: out of the minute's - as long as it says", secs >= 33 && secs <= 35, secs " s")
 secs := DateDiff(AiTrack.RestUntil(Fail("", 503)), A_NowUTC, "Seconds")
-CheckTrue("gemini: overloaded - a minute", secs >= 59 && secs <= 61, secs " s")
+CheckTrue("gemini: overloaded - two hours", secs >= 7199 && secs <= 7201, secs " s")
 
 ; the waiting line: nothing extra when all is normal; what happened when not
 Check("gemini: model names, short", AiTrack.Short("gemini-3.8-flash") "|" AiTrack.Short("gemini-3.5-flash-lite")
@@ -393,7 +476,10 @@ t := AiTrack({word: "bank", context: "", mode: "word"})
 CheckHas("gemini: the next lookup says why it skips one", t.Waiting
     , "model-b - model-a is out of today's free requests (until " back ")")
 t.Got(t.steps[1], Fail("", 503), "")
-CheckTrue("gemini: the last model left is busy - it says so", t.done && t.note = "model-b is busy for a minute", t.note)
+CheckTrue("gemini: the last model left is busy - it says so", t.done
+    && t.note = "model-b is busy or slow (skipped until " AiTrack.LocalTime(AiTrack.resting["model-b"]) ")", t.note)
+AiTrack.resting["model-b"] := AiTrack.RestUntil(Quota("GenerateRequestsPerMinutePerProjectPerModel-FreeTier", "34s"))
+Check("gemini: out of the minute's - busy for a minute", AiTrack.Why("model-b"), "model-b is busy for a minute")
 
 ; everything resting: only the first is asked, then it stops and says until when
 AiTrack.resting := Map("model-a", AiTrack.NextQuotaDay(), "model-b", AiTrack.NextQuotaDay())
@@ -414,6 +500,11 @@ FileAppend('{"models": ["old"], "listed": "' FormatTime(DateAdd(A_Now, -1, "Days
 AiTrack.chain := "", AiTrack.listed := "", AiTrack.loaded := false
 AiTrack.LoadState()
 Check("gemini: ...but yesterday's list is asked for again", AiTrack.chain, "")
+FileDelete(AiTrack.StateFile)
+FileAppend('{"models": ["old"], "listed": "' FormatTime(, "yyyyMMdd") '", "resting": {}}', AiTrack.StateFile, "UTF-8-RAW")
+AiTrack.chain := "", AiTrack.listed := "", AiTrack.loaded := false
+AiTrack.LoadState()
+Check("gemini: ...and so is today's, lined up the old way", AiTrack.chain, "")
 try FileDelete(AiTrack.StateFile)
 IniDelete(VocabIni(), "Gemini", "ApiKey")
 AiTrack.chain := "", AiTrack.resting := Map(), AiTrack.listed := ""

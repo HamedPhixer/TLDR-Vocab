@@ -307,10 +307,8 @@ class Lookup {
 
 ;--------------------------------------------------------------------------------
 ; A track works through a queue of steps, one request at a time. Each step is
-; {name, url, parse, opts?, hedge?, after?}; parse gets the finished Http and
-; returns the answer, or "" for "this source had nothing".
-;   hedge   ms: with no answer by then, one more copy of the request goes out
-;           and whichever answers first is taken (see Answered)
+; {name, url, parse, opts?, after?}; parse gets the finished Http and returns
+; the answer, or "" for "this source had nothing".
 ;   after   A_TickCount before which the step is not sent - a short pause
 ;           before trying again
 ;--------------------------------------------------------------------------------
@@ -318,7 +316,6 @@ class Track {
     __New(lk) {
         this.lk := lk, this.done := false, this.data := "", this.source := ""
         this.tried := [], this.note := "", this.steps := [], this.req := "", this.cur := ""
-        this.twin := "", this.sent := 0, this.again := false
         this.cached := false, this.cacheKind := "", this.enabled := true
         this.Start()
     }
@@ -359,20 +356,11 @@ class Track {
                 return false
             }
             this.req := Http(this.cur.url, this.cur.HasProp("opts") ? this.cur.opts : "")
-            this.twin := "", this.sent := A_TickCount
         }
-        ; A request that hangs is far more often a stuck connection than a
-        ; slow server - pressing "look up again" used to be the cure, and a
-        ; second copy is that cure without the press.
-        hedged := false
-        if (!this.twin && this.cur.HasProp("hedge") && A_TickCount - this.sent >= this.cur.hedge) {
-            this.twin := Http(this.cur.url, this.cur.HasProp("opts") ? this.cur.opts : "")
-            this.again := hedged := true
-        }
-        if !(r := this.Answered())
-            return hedged                   ; the card says it asked again
-        s := this.cur
-        this.req := "", this.twin := ""
+        if !this.req.Poll()
+            return false
+        r := this.req, s := this.cur
+        this.req := ""
         result := ""
         if r.Ok {
             try result := s.parse.Call(r)
@@ -381,23 +369,6 @@ class Track {
         }
         this.tried.Push(s.name (result ? "" : " - " ((r.Ok && r.err = "") ? "no entry" : r.Why)))
         return this.Got(s, r, result)
-    }
-
-    ; The finished request to use, or "" while waiting. With two copies out:
-    ; the first good answer, the other one dropped; a failure only once both
-    ; have failed - then the one the server answered, which says more.
-    Answered() {
-        a := this.req.Poll()
-        if !this.twin
-            return a ? this.req : ""
-        b := this.twin.Poll()
-        if (a && this.req.Ok)
-            return (this.twin.Abort(), this.req)
-        if (b && this.twin.Ok)
-            return (this.req.Abort(), this.twin)
-        if (a && b)
-            return this.req.status ? this.req : this.twin
-        return ""
     }
 
     Got(s, r, result) {
@@ -858,12 +829,16 @@ class FaTrack extends Track {
 ; "persian" being the translation, in whichever language is chosen
 ;
 ; Model choice is automatic unless Vocab.ini names one: the first lookup asks
-; the API which models the key can use and lines up the three newest Flash,
-; then the two newest Flash-Lite, then Google's flash-latest aliases as a last
-; guess. Each model has its own free quota, so running out on one (HTTP 429)
-; simply moves to the next, and the one that answered goes first from then on. If the list cannot be fetched - no network for a moment - the
-; guess serves that one lookup and the list is asked for again next time;
-; kept, it would pin every later lookup to the guess until a restart.
+; the API which models the key can use and lines up the second-newest Flash,
+; then the two newest Flash-Lite, then the other Flash - the newest last -
+; then Google's flash-latest aliases as a last guess. The newest Flash is the
+; busiest and the slowest, and has the fewest free requests; looking up a word
+; does not need it. All of it follows the versions in Google's list - no
+; version is named here. A lookup asks one Flash first: the first in that
+; order that is not resting (Models), then Flash-Lite (NextModel).
+; If the list cannot be fetched - no network for a moment - the guess serves
+; that one lookup and the list is asked for again next time; kept, it would
+; pin every later lookup to the guess until a restart.
 ;
 ; Thinking is kept, but low - enough to read the sentence right, not so much
 ; that a lookup waits on it. 2.5 models take thinkingBudget (512, the least
@@ -872,43 +847,50 @@ class FaTrack extends Track {
 ;
 ; WAITING. Measured through a VPN (September 2026): reaching Google takes
 ; 0.3 s, sometimes 1.3; the rest is Gemini itself - 1.3 s for 3.5 Flash-Lite,
-; 2.6 to 6.2 s for 3.8 Flash - and busy models answer 503 ("overloaded")
-; after 2 to 6 s, or 429 when the free per-minute quota is used up. The app
-; cannot tell a stalled connection from Gemini still thinking: Windows' HTTP
-; object shows neither, both run out on the same "receive" timeout (tested),
-; and even Gemini's streaming answer sends nothing until the answer is ready.
-; So:
-;   - after Hedge ms with no answer - well past a normal answer - one more
-;     copy is sent and the first answer is taken (Track.Answered). It costs
-;     a request from the free quota only then.
+; 2.6 to 6.2 s for 3.8 Flash. In October 2026 the Flash models took 10 to 37 s
+; for a one-word answer, or answered 503 ("high demand"); Flash-Lite 3 to 5 s.
+; The app cannot tell a stalled connection from Gemini still thinking:
+; Windows' HTTP object shows neither, both run out on the same "receive"
+; timeout (tested), and even Gemini's streaming answer sends nothing until the
+; answer is ready. So:
+;   - each model gets Wait ms; with no answer by then, the next is asked.
+;     A Flash that says no at once is followed by another Flash, if there
+;     is time for it and for Flash-Lite after it.
 ;   - a request that could not connect at all is sent again once, a second
 ;     later, before the next model is tried
-;   - a model that said no rests (RestUntil): out of its day's free quota -
-;     20 requests on 3.8 Flash - until the quota day starts again; out of
-;     the minute's, or overloaded (503), for about a minute. Resting models
-;     are skipped, and asked only when no other model is left. The rests
-;     are kept in cache\gemini.json, so a restart does not forget them.
+;   - a model that said no rests (RestUntil), and the next lookup does not
+;     wait on it: out of its day's free quota until the quota day starts
+;     again; busy (503, 504) or silent for the whole Wait, for SlowRest;
+;     out of the minute's quota, for about a minute. Resting models are
+;     asked only when no other model is left, and one that then answers
+;     rests no more. The rests are kept in cache\gemini.json, so a restart
+;     does not forget them.
 ;   - all of it, every model and every retry, stops at Budget ms, with a note
 ;     that says to look up again
 ;--------------------------------------------------------------------------------
 class AiTrack extends Track {
-    static chain := "", good := "", keyBad := ""
+    static chain := "", keyBad := ""
     static Api := "https://generativelanguage.googleapis.com/v1beta/"
     ; the -latest aliases follow whatever Flash is current, so they never go
     ; out of date the way named models do (docs\decisions.md)
     static Guess := ["gemini-flash-latest", "gemini-flash-lite-latest"]
-    static Hedge := 10000, Budget := 30000
+    static Wait := 15000, Budget := 30000, SlowRest := 2 * 3600
+    ; another Flash is asked in the same lookup only if Flash-Lite would
+    ; still have this long after it; Flash-Lite answers in 3 to 5 s
+    static Spare := 8000
     ; What is known about the models is kept in cache\gemini.json, so a
     ; restart neither asks for the list again the same day nor tries a model
     ; that is still out of quota:
-    ;   {"models": [...], "listed": "YYYYMMDD", "resting": {model: till}}
-    ; till is UTC, YYYYMMDDHHMISS.
+    ;   {"models": [...], "listed": "YYYYMMDD", "order": n, "resting": {model: till}}
+    ; till is UTC, YYYYMMDDHHMISS. order is Order below: a list saved by a
+    ; version that lined the models up differently is not used.
+    static Order := 2
     static resting := Map(), listed := "", loaded := false, listing := false
     static StateFile => Cache.Dir "\gemini.json"
 
     Start() {
         this.key := GeminiKey()
-        this.noThink := false, this.t0 := A_TickCount, this.retried := Map(), this.status := ""
+        this.noThink := false, this.t0 := A_TickCount, this.retried := Map(), this.asked := Map(), this.status := ""
         if (this.key = "") {
             this.enabled := false, this.done := true, this.note := "no key"
             return
@@ -937,8 +919,7 @@ class AiTrack extends Track {
     ; What the card shows while it waits. Normally just "asking Gemini...";
     ; when something is not normal, one more line says what - so a busy or
     ; used-up model does not look like a broken connection.
-    Waiting => "asking Gemini" Chr(0x2026) ((this.status != "") ? "`n" this.status
-        : this.again ? "`nno answer yet, asked again" : "")
+    Waiting => "asking Gemini" Chr(0x2026) ((this.status != "") ? "`n" this.status : "")
 
     ; "gemini-3.5-flash-lite" -> "3.5 Flash-Lite"
     static Short(m) {
@@ -949,13 +930,16 @@ class AiTrack extends Track {
         return RegExReplace(m, "-flash$", " Flash")
     }
 
-    ; why a model is resting, in a few words
+    ; why a model is resting, in a few words. Only the day's quota rests a
+    ; model until the next quota day, so a rest ending exactly then is that.
     static Why(m) {
         if !AiTrack.IsResting(m)
             return ""
         till := AiTrack.resting[m]
+        if (till = AiTrack.NextQuotaDay())
+            return AiTrack.Short(m) " is out of today's free requests (until " AiTrack.LocalTime(till) ")"
         return (DateDiff(till, A_NowUTC, "Minutes") >= 10)
-            ? AiTrack.Short(m) " is out of today's free requests (until " AiTrack.LocalTime(till) ")"
+            ? AiTrack.Short(m) " is busy or slow (skipped until " AiTrack.LocalTime(till) ")"
             : AiTrack.Short(m) " is busy for a minute"
     }
     Left => AiTrack.Budget - (A_TickCount - this.t0)
@@ -992,7 +976,8 @@ class AiTrack extends Track {
         AiTrack.loaded := true
         try {
             s := Json.Parse(FileRead(AiTrack.StateFile, "UTF-8"))
-            if (Dig(s, "listed") = FormatTime(, "yyyyMMdd") && Dig(s, "models") is Array && s["models"].Length)
+            if (Dig(s, "listed") = FormatTime(, "yyyyMMdd") && Dig(s, "order") = AiTrack.Order
+                && Dig(s, "models") is Array && s["models"].Length)
                 AiTrack.chain := s["models"], AiTrack.listed := s["listed"]
             if (Dig(s, "resting") is Map)
                 for m, till in s["resting"]
@@ -1008,7 +993,7 @@ class AiTrack extends Track {
         try {
             DirCreate(Cache.Dir)
             WriteFileAtomic(AiTrack.StateFile, Json.Dump(Map("models", AiTrack.chain || []
-                , "listed", AiTrack.listed, "resting", AiTrack.resting), " "))
+                , "listed", AiTrack.listed, "order", AiTrack.Order, "resting", AiTrack.resting), " "))
         } catch as e
             VocabLog("saving gemini.json failed: " e.Message)
     }
@@ -1022,19 +1007,20 @@ class AiTrack extends Track {
     ; How long a model that said no rests (UTC, until when). 429 says which
     ; quota ran out: the day's - 20 requests for 3.8 Flash on a free key - is
     ; out until Google's quota day starts again, at midnight Pacific time;
-    ; the minute's for as long as its retryDelay says. 503, overloaded: a
-    ; minute.
+    ; the minute's for as long as its retryDelay says. Anything else - busy,
+    ; or no answer in time - SlowRest: Google calls the busy spells "usually
+    ; temporary", but they last longer than a few lookups.
     static RestUntil(r) {
+        if (r.status != 429)
+            return DateAdd(A_NowUTC, AiTrack.SlowRest, "Seconds")
         wait := 60
-        if (r.status = 429) {
-            try {
-                for det in (Dig(Json.Parse(r.text), "error", "details") || []) {
-                    for v in (Dig(det, "violations") || [])
-                        if InStr(Dig(v, "quotaId"), "PerDay")
-                            return AiTrack.NextQuotaDay()
-                    if (RegExMatch(Dig(det, "retryDelay"), "^([\d.]+)s$", &m) && m[1] > 0)
-                        wait := Min(Max(Ceil(m[1]), 10), 300)
-                }
+        try {
+            for det in (Dig(Json.Parse(r.text), "error", "details") || []) {
+                for v in (Dig(det, "violations") || [])
+                    if InStr(Dig(v, "quotaId"), "PerDay")
+                        return AiTrack.NextQuotaDay()
+                if (RegExMatch(Dig(det, "retryDelay"), "^([\d.]+)s$", &m) && m[1] > 0)
+                    wait := Min(Max(Ceil(m[1]), 10), 300)
             }
         }
         return DateAdd(A_NowUTC, wait, "Seconds")
@@ -1067,17 +1053,26 @@ class AiTrack extends Track {
     ; "until 10:30", in this PC's own time
     static LocalTime(utc) => FormatTime(DateAdd(utc, DateDiff(A_Now, A_NowUTC, "Minutes"), "Minutes"), "HH:mm")
 
+    ; a numbered Flash - not Flash-Lite, not an alias
+    static IsFlash(m) => RegExMatch(m, "^gemini-\d+(\.\d+)?-flash$")
+
     static Models() {
         AiTrack.LoadState()
         chain := AiTrack.chain ? AiTrack.chain.Clone() : []
+        ; one Flash leads: the first in the list that is not resting. A
+        ; resting Flash so hands its place to the next Flash, not to
+        ; Flash-Lite - otherwise the other Flash would never be asked.
+        for i, x in chain
+            if (AiTrack.IsFlash(x) && !AiTrack.IsResting(x)) {
+                chain.InsertAt(1, chain.RemoveAt(i))
+                break
+            }
         m := GeminiModel()
         if (m != "") {
             if !chain.Length
                 chain := AiTrack.Guess.Clone()
             chain.InsertAt(1, m)
         }
-        if (AiTrack.good != "" && chain.Length)
-            chain.InsertAt(1, AiTrack.good)
         ; resting models last - asked only when no other is left
         out := [], tired := []
         for x in chain
@@ -1108,8 +1103,8 @@ class AiTrack extends Track {
         body := Json.Dump(Map("contents", [Map("role", "user", "parts", [Map("text", AiTrack.Prompt(this.lk))])]
             , "generationConfig", cfg), "", true)
         return {name: "Gemini", kind: "gen", model: model, think: IsObject(think)
-            , url: AiTrack.Api "models/" model ":generateContent", hedge: AiTrack.Hedge, after: after
-            , opts: {method: "POST", body: body, timeout: Max(3000, Min(20000, this.Left))
+            , url: AiTrack.Api "models/" model ":generateContent", after: after
+            , opts: {method: "POST", body: body, timeout: Max(3000, Min(AiTrack.Wait, this.Left))
                 , headers: Map("x-goog-api-key", this.key, "Content-Type", "application/json")}
             , parse: ObjBindMethod(AiTrack, "Answer", this.lk.mode)}
     }
@@ -1117,10 +1112,10 @@ class AiTrack extends Track {
     ; the next request, unless the time for all of them is up
     ; what a model's answer meant, for the waiting line
     static Said(m, r) {
-        if (r.status = 429 || r.status = 503)
+        if (r.status = 429 || r.status = 503 || r.status = 504)
             return AiTrack.Why(m)
         return AiTrack.Short(m) ((r.status = 404) ? " is no longer offered"
-            : (r.err = "timed out") ? " did not answer"
+            : (r.err = "timed out") ? " did not answer in time"
             : (r.err != "") ? ": no connection"
             : " failed (" r.Why ")")
     }
@@ -1134,6 +1129,23 @@ class AiTrack extends Track {
         if (status != "")
             this.status := status
         return (status != "")                  ; true: the card redraws its waiting line
+    }
+
+    ; Which model after one that said no: the first in the list not asked yet
+    ; and not resting - resting ones are only asked when nothing else is
+    ; left, and then only the first. Flash-Lite stands before the other
+    ; Flash in the list, so a slow Flash is followed by Flash-Lite. But a
+    ; Flash that said no at once (a reply, not a wait) leaves time for one
+    ; more Flash, when Flash-Lite would still have Spare ms after its Wait.
+    NextModel(s, r) {
+        if (r.status && AiTrack.IsFlash(s.model) && this.Left >= AiTrack.Wait + AiTrack.Spare)
+            for m in this.models
+                if (AiTrack.IsFlash(m) && !this.asked.Has(m) && !AiTrack.IsResting(m))
+                    return m
+        for m in this.models
+            if (!this.asked.Has(m) && !AiTrack.IsResting(m))
+                return m
+        return ""
     }
 
     Got(s, r, result) {
@@ -1156,8 +1168,12 @@ class AiTrack extends Track {
             this.steps := [this.GenStep(this.models[1])]
             return false
         }
+        this.asked[s.model] := true
         if result {
-            AiTrack.good := s.model
+            if AiTrack.resting.Has(s.model) {   ; asked as the last one left, and it answered
+                AiTrack.resting.Delete(s.model)
+                AiTrack.SaveState()
+            }
             this.Take(s, result)
             this.source := "Gemini " RegExReplace(s.model, "^gemini-")
             return this.Finish()
@@ -1169,10 +1185,13 @@ class AiTrack extends Track {
         ; no connection at all (not a timeout, not an answer): once more, the
         ; same model, a second later - the first try is what some networks drop
         if (r.err != "" && r.err != "timed out" && !r.status && !this.retried.Has(s.model)) {
-            this.retried[s.model] := true, this.again := true
+            this.retried[s.model] := true
             return this.Next(this.GenStep(s.model, A_TickCount + 1000), "could not connect, asked again")
         }
-        if (r.status = 429 || r.status = 503) {
+        ; Silent for the whole Wait rests it too - but not when the time left
+        ; for the lookup cut its wait short: it never had a fair chance.
+        if (r.status = 429 || r.status = 503 || r.status = 504
+            || (r.err = "timed out" && s.opts.timeout >= AiTrack.Wait)) {
             AiTrack.resting[s.model] := AiTrack.RestUntil(r)
             AiTrack.SaveState()
         }
@@ -1180,16 +1199,11 @@ class AiTrack extends Track {
             AiTrack.chain := "", AiTrack.listed := ""
             AiTrack.SaveState()
         }
-        ; on to the next model - but not to one that is resting: those are
-        ; only asked when nothing else is left, and then only the first
-        if (r.status = 429 || r.status = 404 || r.status = 403 || r.status >= 500 || r.err != "") {
-            for i, m in this.models
-                if (m = s.model && i < this.models.Length && !AiTrack.IsResting(this.models[i + 1]))
-                    return this.Next(this.GenStep(this.models[i + 1])
-                        , AiTrack.Said(s.model, r) ", trying " AiTrack.Short(this.models[i + 1]))
-        }
+        if (r.status = 429 || r.status = 404 || r.status = 403 || r.status >= 500 || r.err != "")
+            if ((m := this.NextModel(s, r)) != "")
+                return this.Next(this.GenStep(m), AiTrack.Said(s.model, r) ", trying " AiTrack.Short(m))
         this.note := (r.status = 429) ? AiTrack.QuotaNote()
-                   : (r.status = 503) ? AiTrack.Said(s.model, r)
+                   : (r.status = 503 || r.status = 504 || r.err = "timed out") ? AiTrack.Said(s.model, r)
                    : r.Ok ? "no usable answer"
                    : (msg != "") ? Http.Short(msg) : r.Why
         return this.Finish()
@@ -1264,13 +1278,17 @@ class AiTrack extends Track {
             else if RegExMatch(name, "^gemini-(\d+(?:\.\d+)?)-flash-lite$", &v)
                 AiTrack.Insert(lite, Float(v[1]), name)
         }
+        ; second-newest Flash, two Flash-Lite, then the third Flash and the
+        ; newest - which leads only when it is the one Flash there is
         chain := []
-        for i, x in flash
-            if (i <= 3)
-                chain.Push(x[2])
+        if flash.Length
+            chain.Push(flash[Min(2, flash.Length)][2])
         for i, x in lite
             if (i <= 2)
                 chain.Push(x[2])
+        for i in [3, 1]
+            if (i <= flash.Length && !HasVal(chain, flash[i][2]))
+                chain.Push(flash[i][2])
         for x in AiTrack.Guess
             if !HasVal(chain, x)
                 chain.Push(x)
@@ -1306,7 +1324,7 @@ class AiTrack extends Track {
             v := Dig(j, k)
             out[k] := Trim((v is Array) ? Join(v, Lang.Sep()) : IsObject(v) ? "" : String(v))
         }
-        out["persian"] := out.Delete("translation")         ; its name everywhere else - see Language.ahk
+        out["persian"] := Lang.Mend(out.Delete("translation"))     ; its name everywhere else - see Language.ahk
         if (mode = "sentence")
             return (out["simple"] = "" && out["persian"] = "") ? "" : out
         if (mode = "paragraph")

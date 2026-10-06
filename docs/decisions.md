@@ -82,8 +82,10 @@ at `:` or `;` left Gemini half a sentence of context.
 ## Gemini
 
 - **Models:** the app asks the API which models the key can use and lines up
-  the three newest Flash, then the two newest Flash-Lite. Each has its own free
-  quota, so a 429 moves to the next one.
+  the second-newest Flash, then the two newest Flash-Lite, then the other
+  Flash with the newest last (1.2.3; it was the three newest Flash first).
+  Each has its own free quota, so a 429 moves to the next one. A saved list
+  lined up the old way is not used (`"order"` in `cache\gemini.json`).
 - **The fallback guesses are the `-latest` aliases.** They were
   `gemini-2.5-flash(-lite)` until Google retired those (HTTP 404, September
   2026) — a failed model list then pinned every lookup to dead models.
@@ -122,6 +124,47 @@ at `:` or `;` left Gemini half a sentence of context.
   429 and the card says until when. The first lookup after start also had to fetch
   the model list before it could ask anything; the list is now fetched 3 s
   after start.
+- **Slow Flash, and no more second copies (1.2.3).** In October 2026 the
+  three Flash models took 10 to 37 s for a one-word answer, or answered 503
+  "high demand", while Flash-Lite took 3 to 5 s — and the history in
+  `words.json` showed Flash answering only now and then. Two things kept it
+  that way: the 10 s second copy and 20 s limit lost to answers that took
+  longer, and the model that answered was put first until a restart, so one
+  bad minute in the morning meant Flash-Lite all day. Now:
+  - the newest Flash is not asked first: it is the busiest, has the fewest
+    free requests, and a word lookup does not need the strongest model
+  - each model gets 15 s; with no answer the next is asked. No second copy:
+    the waits measured were slow answers, not stalled connections, and a
+    copy only spent another free request. A connection that fails at once
+    is still tried again a second later.
+  - a model that is busy (503, 504) or silent for its whole 15 s rests for
+    2 hours; out of the day's quota, until the quota day as before. A model
+    cut short by the lookup's 30 s is not rested — it had no fair chance.
+    Busy was a minute: Google calls those spells "usually temporary", but a
+    minute was shorter than they lasted.
+  - the "answered last, asked first" pin is gone: rests already keep the
+    lookups off a failing model, and the pin would have kept Flash out even
+    after its rest ended. A resting model that answers (asked because all
+    were resting) rests no more.
+  - one Flash leads each lookup: the first in the list that is not resting.
+    Without that, a resting Flash handed its place to Flash-Lite, and the
+    other Flash — further down the list — were never asked until it woke.
+    A Flash that says no at once (503 in 2 to 6 s) is followed by the next
+    Flash in the same lookup, if Flash-Lite would still have 8 s after that
+    one's 15; a slow one goes straight to Flash-Lite. Worst case, each Flash
+    costs one slow lookup per rest. No version is named in the code: the
+    order comes from the versions in Google's list.
+  Rejected: waiting 15 s on two Flash models before Flash-Lite — 30 s is the
+  whole budget, so Flash-Lite would get no time at all. Asking every Flash
+  on every lookup: when Google is busy they are slow together.
+- **Half-spaces in Gemini's Persian (1.2.3).** Flash-Lite sometimes writes a
+  Latin letter where a half-space (ZWNJ) belongs, and now and then garbles a
+  whole word into Latin and Persian letters. The app's decoding was checked
+  and is clean; it is the model. A single Latin letter between two Arabic
+  letters becomes the half-space; any other Latin letter straight after an
+  Arabic one drops Gemini's translation, and the card shows the translator's
+  line instead. Latin before an Arabic letter is allowed ("APIha"). None of
+  the 1151 Persian texts in `words.json` and the cache was touched by it.
 - **Thinking stays on, but low** (the user's choice): 3.x models get
   `thinkingLevel: low`; 2.5 models got `thinkingBudget: 0` — none at all —
   and now get 512, the least 2.5 Flash-Lite accepts.
