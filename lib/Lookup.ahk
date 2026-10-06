@@ -1249,6 +1249,9 @@ class AiTrack extends Track {
 
     ; A note, a blog paragraph, a page of patch notes: what does it actually
     ; say. Short, and in both languages - a little longer for a long text.
+    ; The second language explains rather than translates: asked for "the
+    ; same summary in natural Persian", Gemini wrote formal Persian and
+    ; turned names into Persian words, which hides what the text is about.
     static ParagraphPrompt(lk) {
         size := (StrLen(lk.word) > SummaryLongChars())
             ? "five or six short sentences, so its main points are all there"
@@ -1261,7 +1264,10 @@ class AiTrack extends Track {
             . '{"summary": "", "translation": "", "note": ""}' "`n`n"
             . "summary: what this text says, in simple English, " size "."
             . " Ignore anything that clearly belongs to something else on the screen`n"
-            . "translation: the same summary in natural " Lang.PromptName() "`n"
+            . "translation: the same summary in everyday " Lang.PromptName() ", the way a "
+            . Lang.PromptName() " speaker would explain it to a friend - not formal or literary."
+            . " Keep names of people, places, games, products and companies, and technical terms,"
+            . " in English as written; do not translate them`n"
             . "note: a name, a term or a reference worth a few words; otherwise empty"
     }
 

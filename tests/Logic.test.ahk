@@ -90,6 +90,8 @@ fake := {mode: "paragraph", word: "A short note."}
 CheckHas("summary prompt: short text, short summary", AiTrack.Prompt(fake), "two or three short sentences")
 fake.word := StrReplace(Format("{:" SummaryLongChars() + 1 "}", ""), " ", "x")
 CheckHas("summary prompt: long text, longer summary", AiTrack.Prompt(fake), "five or six short sentences")
+CheckHas("summary prompt: explains in everyday words, names kept", AiTrack.Prompt(fake)
+    , "explain it to a friend", "in English as written")
 
 ;--- the popup stays on the screen ---------------------------------------------
 wa := WorkAreaAt(100, 100)

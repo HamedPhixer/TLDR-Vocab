@@ -4,6 +4,11 @@ Each version's notes. The release on GitHub is built from the section with its n
 
 ## 1.2.4 — not released yet
 
+### Changed
+
+- **Summary explains in everyday Persian** and keeps names and technical terms in English, instead of
+  translating them.
+
 ### Fixed
 
 - **Gemini no longer softens dark lines.** "Why Are We So Bad at Executing People?" is about executions, not
