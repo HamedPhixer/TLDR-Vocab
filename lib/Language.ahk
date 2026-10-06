@@ -85,13 +85,16 @@ class Lang {
     ; Any other Latin letter straight after an Arabic one is a word gone
     ; wrong - ch us p charani for chashm-charani, h al for the name Hal: then
     ; "", and the card shows the translator's line instead. Latin BEFORE an
-    ; Arabic letter is left alone: Persian writes "APIha" that way.
+    ; Arabic letter is left alone: Persian writes "APIha" that way. A digit
+    ; does the same inside a word (be 1 shan for be-shan) and is treated the
+    ; same between two letters; beside a word ("3bodi", "sal 1998") it is a
+    ; real number and stays.
     static Letter := "[\x{0620}-\x{064A}\x{066E}-\x{06D3}\x{06FA}-\x{06FF}]"
     static Mend(s) {
         if !Lang.Arabic()
             return s
-        s := RegExReplace(s, "(?<=" Lang.Letter ")\x{200C}?[A-Za-z]\x{200C}?(?=" Lang.Letter ")", Chr(0x200C))
-        return RegExMatch(s, Lang.Letter "\x{200C}?[A-Za-z]") ? "" : s
+        s := RegExReplace(s, "(?<=" Lang.Letter ")\x{200C}?[A-Za-z0-9]\x{200C}?(?=" Lang.Letter ")", Chr(0x200C))
+        return RegExMatch(s, Lang.Letter "\x{200C}?([A-Za-z]|[0-9]+\x{200C}?" Lang.Letter ")") ? "" : s
     }
 
     ; Persian keeps the cache name it always had, so words looked up before

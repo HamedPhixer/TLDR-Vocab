@@ -2,6 +2,14 @@
 
 Each version's notes. The release on GitHub is built from the section with its number.
 
+## 1.2.4 — not released yet
+
+### Fixed
+
+- **Gemini no longer softens dark lines.** "Why Are We So Bad at Executing People?" is about executions, not
+  about getting work done.
+- **Stray digits in Gemini's Persian** are cleaned up like the stray letters.
+
 ## 1.2.3 — 2026-10-06
 
 ### Changed

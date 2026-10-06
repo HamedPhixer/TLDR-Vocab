@@ -127,6 +127,10 @@ fake := {mode: "word", word: "bank", context: "The boat reached the bank."}
 CheckHas("language: the word prompt names it", AiTrack.Prompt(fake), "Chinese (Simplified) speaker", '"translation"')
 fake.mode := "sentence"
 CheckHas("language: the sentence prompt names it", AiTrack.Prompt(fake), "Chinese (Simplified) speaker", "translation: a natural Chinese (Simplified)")
+CheckHas("prompt: a sentence asks for the likeliest meaning", AiTrack.Prompt(fake), "even when the topic is dark")
+fake.mode := "word"
+CheckHas("prompt: ...and so does a word", AiTrack.Prompt(fake), "even when the topic is dark")
+fake.mode := "sentence"
 CheckTrue("language: old senses are not shown in a new language", !Lang.SensesMatch(Map("groups", [])))
 Lang.current := Lang.Find("fa")
 CheckTrue("language: old senses are Persian", Lang.SensesMatch(Map("groups", [])))
@@ -156,6 +160,9 @@ Check("persian: English beside Persian is left alone", Lang.Mend("API " charbi "
 Check("persian: a Persian ending on English is left alone", Lang.Mend("API" ash), "API" ash)
 Check("persian: letters lost inside a word - dropped", Lang.Mend(broken " " ash), "")
 Check("persian: a name half in Latin - dropped", Lang.Mend(Letters(0x062D) "al " charbi), "")
+Check("persian: a stray digit becomes the half-space", Lang.Mend(charbi "1" ash), charbi zw ash)
+Check("persian: digits inside a word - dropped", Lang.Mend(charbi "12" ash), "")
+Check("persian: numbers beside words stay", Lang.Mend("3" charbi " 1998 " ash " " ash "5"), "3" charbi " 1998 " ash " " ash "5")
 answer := '{"simple": "Watching.", "translation": "' broken '", "fixed": "", "note": ""}'
 part["text"] := answer
 got := AiTrack.Answer("sentence", {text: Json.Dump(Map("candidates", [Map("content", Map("parts", [part]))]))})

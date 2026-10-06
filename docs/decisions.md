@@ -163,8 +163,20 @@ at `:` or `;` left Gemini half a sentence of context.
   and is clean; it is the model. A single Latin letter between two Arabic
   letters becomes the half-space; any other Latin letter straight after an
   Arabic one drops Gemini's translation, and the card shows the translator's
-  line instead. Latin before an Arabic letter is allowed ("APIha"). None of
+  line instead. Latin before an Arabic letter is allowed ("APIha"). A digit inside a word (seen
+  once: "be1shan") is treated the same; a number beside a word stays. None of
   the 1151 Persian texts in `words.json` and the cache was touched by it.
+- **"Do not soften it" (1.2.4).** Small models read a dark line the harmless
+  way: "Why Are We So Bad at Executing People?" came back as carrying out
+  plans, while the model's own note named capital punishment. The word and
+  sentence prompts now end with "Give the most likely meaning, even when the
+  topic is dark or violent; do not soften it. If it could mean two things,
+  give the likelier one and mention the other in the note." Tested on 3.5
+  Flash-Lite with 40 saved words and sentences, each asked both ways: no
+  answer got worse beyond the usual run-to-run wobble, harmless words did
+  not turn dark, and some got better ("impotent" in a suspect's description
+  now gets its sexual sense). It helps Flash-Lite only sometimes; Flash got
+  the headline right.
 - **Thinking stays on, but low** (the user's choice): 3.x models get
   `thinkingLevel: low`; 2.5 models got `thinkingBudget: 0` — none at all —
   and now get 512, the least 2.5 Flash-Lite accepts.

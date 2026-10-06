@@ -1237,7 +1237,15 @@ class AiTrack extends Track {
             . " not word for word`n"
             . "note: an idiom, a joke, slang or a reference worth a few words of explanation;"
             . " otherwise empty"
+            . "`n`n" AiTrack.Likeliest
     }
+
+    ; Small models pick the harmless reading of a dark line ("Why Are We So
+    ; Bad at Executing People?" came back as carrying out plans) even when
+    ; their own note names the real one. Tested on 40 saved words and
+    ; sentences: no answer got worse for it (docs\decisions.md).
+    static Likeliest := "Give the most likely meaning, even when the topic is dark or violent; do not soften it."
+        . " If it could mean two things, give the likelier one and mention the other in the note."
 
     ; A note, a blog paragraph, a page of patch notes: what does it actually
     ; say. Short, and in both languages - a little longer for a long text.
@@ -1357,6 +1365,7 @@ class AiTrack extends Track {
             . "note: if it is part of an idiom, a phrasal verb or slang here, say so in a few words; otherwise empty`n"
             . "example: " ((ctx != "") ? "the sentence with obvious OCR errors fixed, or empty if it is not a real sentence"
                                        : "one short natural example sentence")
+            . "`n`n" AiTrack.Likeliest
         return p
     }
 }
