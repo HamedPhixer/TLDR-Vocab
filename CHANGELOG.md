@@ -2,7 +2,7 @@
 
 Each version's notes. The release on GitHub is built from the section with its number.
 
-## 1.2.4 — not released yet
+## 1.2.4 — 2026-10-07
 
 ### Changed
 
@@ -18,17 +18,14 @@ Each version's notes. The release on GitHub is built from the section with its n
 
 ## 1.2.3 — 2026-10-06
 
-### Changed
+<details>
+<summary><b>Changed</b> (2), <b>Fixed</b> (1)</summary>
 
-- **The box freezes the screen when you press its key**, so a tooltip that vanishes when the mouse moves stays
-  put while you draw. Nothing is saved.
-- **Gemini uses its Flash models more.** The newest, busiest Flash is no longer first. A busy or slow one
-  (no answer in 15 s) is skipped for two hours, and the next Flash steps in.
+- **The box freezes the screen when you press its key**, so a tooltip that vanishes when the mouse moves stays put while you draw. Nothing is saved.
+- **Gemini uses its Flash models more.** The newest, busiest Flash is no longer first. A busy or slow one (no answer in 15 s) is skipped for two hours, and the next Flash steps in.
+- **No more stray English letters in Gemini's Persian.** A broken half-space is fixed; a garbled word falls back to the translator's line.
 
-### Fixed
-
-- **No more stray English letters in Gemini's Persian.** A broken half-space is fixed; a garbled word falls
-  back to the translator's line.
+</details>
 
 ## 1.2.2 — 2026-10-02
 
