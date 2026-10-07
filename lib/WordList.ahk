@@ -355,14 +355,19 @@ class Dict {
             return
         r := this.paneRect
         kind := this.st.kind
-        if (kind = "lookup")
-            this.pane.Build(r[3], (c, W) => RenderLookup(c, W, Dict.st, Dict))
-        else if (kind = "entry")
-            this.pane.Build(r[3], (c, W) => RenderEntry(c, W, Dict.st))
-        else
-            this.pane.Build(r[3], (c, W) => Dict.DrawEmpty(c, W))
-        this.pane.Show(r[4])
-        this.renderedW := r[3]
+        was := A_IsCritical
+        Critical                    ; one drawing at a time - see Popup.Render
+        try {
+            if (kind = "lookup")
+                this.pane.Build(r[3], (c, W) => RenderLookup(c, W, Dict.st, Dict))
+            else if (kind = "entry")
+                this.pane.Build(r[3], (c, W) => RenderEntry(c, W, Dict.st))
+            else
+                this.pane.Build(r[3], (c, W) => Dict.DrawEmpty(c, W))
+            this.pane.Show(r[4])
+            this.renderedW := r[3]
+        } finally
+            Critical(was)
     }
 
     static DrawEmpty(c, W) {

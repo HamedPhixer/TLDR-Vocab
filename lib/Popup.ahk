@@ -129,24 +129,33 @@ class PopupCard {
         return Max(wa[2], Min(y, wa[4] - h))
     }
 
+    ; One drawing at a time. A long card - Persian is measured word by word -
+    ; takes long enough for the lookup timer, a key or a click to start
+    ; another drawing in the middle of it; that one destroyed the controls
+    ; the first was still filling ("The control is destroyed").
     Render() {
-        st := this.st
-        if st.HasProp("message")
-            ch := this.pane.Build(this.w, (g, W) => this.DrawMessage(g, W))
-        else
-            ch := this.pane.Build(this.w, (g, W) => RenderLookup(g, W, this.st, this))
-        h := Min(ch, st.lockH ? st.lockH : this.capH)
-        if (this.isPinned && this.visible) {    ; where it was put, only its height changes
-            WinGetPos(&x, &y, , , this.g.Hwnd)
-            this.g.Show("NoActivate x" x " y" y " w" this.w " h" h)
-        } else
-            this.g.Show("NoActivate x" this.px " y" this.PlaceY(h) " w" this.w " h" h)
-        this.pane.Show(h)
-        if !this.visible {
-            DwmAttr(this.g.Hwnd, 33, 2)                 ; rounded corners (Windows 11)
-            DwmAttr(this.g.Hwnd, 34, 0x402F2A)          ; border in CTrack (BGR)
-        }
-        this.h := h, this.visible := true
+        was := A_IsCritical
+        Critical
+        try {
+            st := this.st
+            if st.HasProp("message")
+                ch := this.pane.Build(this.w, (g, W) => this.DrawMessage(g, W))
+            else
+                ch := this.pane.Build(this.w, (g, W) => RenderLookup(g, W, this.st, this))
+            h := Min(ch, st.lockH ? st.lockH : this.capH)
+            if (this.isPinned && this.visible) {    ; where it was put, only its height changes
+                WinGetPos(&x, &y, , , this.g.Hwnd)
+                this.g.Show("NoActivate x" x " y" y " w" this.w " h" h)
+            } else
+                this.g.Show("NoActivate x" this.px " y" this.PlaceY(h) " w" this.w " h" h)
+            this.pane.Show(h)
+            if !this.visible {
+                DwmAttr(this.g.Hwnd, 33, 2)                 ; rounded corners (Windows 11)
+                DwmAttr(this.g.Hwnd, 34, 0x402F2A)          ; border in CTrack (BGR)
+            }
+            this.h := h, this.visible := true
+        } finally
+            Critical(was)
     }
 
     DrawMessage(g, W) {
