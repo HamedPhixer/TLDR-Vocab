@@ -864,9 +864,11 @@ class FaTrack extends Track {
 ;     out of the minute's quota, for about a minute. Only an answer from
 ;     Google itself rests a model: a VPN or proxy that cannot get through
 ;     says 503 too, for every model within seconds (October 2026 - all of
-;     them rested two hours). Resting models are asked only when no other
-;     model is left, Flash-Lite first, and one that then answers rests no
-;     more; one out of its day's quota is not asked at all. The rests are
+;     them rested two hours). An answer from the network instead of Google
+;     ends the lookup at once - every other model goes the same way. Resting
+;     models are asked only when no other model is left, Flash-Lite first,
+;     and one that then answers rests no more; one out of its day's quota
+;     is not asked at all. The rests are
 ;     kept in cache\gemini.json, so a restart does not forget them.
 ;   - all of it, every model and every retry, stops at Budget ms, with a note
 ;     that says to look up again
@@ -1077,15 +1079,16 @@ class AiTrack extends Track {
             chain.InsertAt(1, m)
         }
         ; resting models last - asked only when no other is left, Flash-Lite
-        ; first: it is the quickest to answer
-        out := [], tired := [], lite := []
+        ; first: it is the quickest to answer. Out of the day's quota last
+        ; of all: it is sure to say no.
+        out := [], lite := [], tired := [], spent := [], day := AiTrack.NextQuotaDay()
         for x in chain
-            if !HasVal(out, x) && !HasVal(tired, x) && !HasVal(lite, x)
-                (!AiTrack.IsResting(x) ? out : InStr(x, "flash-lite") ? lite : tired).Push(x)
-        for x in lite
-            out.Push(x)
-        for x in tired
-            out.Push(x)
+            if !HasVal(out, x) && !HasVal(lite, x) && !HasVal(tired, x) && !HasVal(spent, x)
+                (!AiTrack.IsResting(x) ? out : (AiTrack.resting[x] = day) ? spent
+                    : InStr(x, "flash-lite") ? lite : tired).Push(x)
+        for list in [lite, tired, spent]
+            for x in list
+                out.Push(x)
         return out
     }
 
@@ -1118,8 +1121,6 @@ class AiTrack extends Track {
     ; the next request, unless the time for all of them is up
     ; what a model's answer meant, for the waiting line
     static Said(m, r) {
-        if (r.status && !AiTrack.FromGoogle(r))
-            return AiTrack.Short(m) ": HTTP " r.status " from the network, not Gemini"
         if (r.status = 429 || r.status = 503 || r.status = 504)
             return AiTrack.Why(m)
         return AiTrack.Short(m) ((r.status = 404) ? " is no longer offered"
@@ -1190,6 +1191,13 @@ class AiTrack extends Track {
             this.source := "Gemini " RegExReplace(s.model, "^gemini-")
             return this.Finish()
         }
+        ; the VPN or proxy, or Google's block page where Gemini is not
+        ; offered: no model is reached that way, so none rests and no other
+        ; is tried
+        if (r.status && !AiTrack.FromGoogle(r)) {
+            this.note := "Gemini not reached (HTTP " r.status " from the network) - check the VPN or proxy"
+            return this.Finish()
+        }
         if (r.status = 400 && s.think && !this.noThink) {
             this.noThink := true
             return this.Next(this.GenStep(s.model))
@@ -1202,21 +1210,19 @@ class AiTrack extends Track {
         }
         ; Silent for the whole Wait rests it too - but not when the time left
         ; for the lookup cut its wait short: it never had a fair chance.
-        google := AiTrack.FromGoogle(r)
-        if (((r.status = 429 || r.status = 503 || r.status = 504) && google)
+        if (r.status = 429 || r.status = 503 || r.status = 504
             || (r.err = "timed out" && s.opts.timeout >= AiTrack.Wait)) {
             AiTrack.resting[s.model] := AiTrack.RestUntil(r)
             AiTrack.SaveState()
         }
-        if (r.status = 404 && google) {         ; a model Google retired: a new list next time
+        if (r.status = 404) {                   ; a model Google retired: a new list next time
             AiTrack.chain := "", AiTrack.listed := ""
             AiTrack.SaveState()
         }
         if (r.status = 429 || r.status = 404 || r.status = 403 || r.status >= 500 || r.err != "")
             if ((m := this.NextModel(s, r)) != "")
                 return this.Next(this.GenStep(m), AiTrack.Said(s.model, r) ", trying " AiTrack.Short(m))
-        this.note := (r.status && !google) ? "Gemini not reached (HTTP " r.status " from the network) - check the VPN or proxy"
-                   : (r.status = 429) ? AiTrack.QuotaNote()
+        this.note := (r.status = 429) ? AiTrack.QuotaNote()
                    : (r.status = 503 || r.status = 504 || r.err = "timed out") ? AiTrack.Said(s.model, r)
                    : r.Ok ? "no usable answer"
                    : (msg != "") ? Http.Short(msg) : r.Why

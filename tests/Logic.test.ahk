@@ -493,15 +493,17 @@ CheckTrue("gemini: the last model left is busy - it says so", t.done
 AiTrack.resting["model-b"] := AiTrack.RestUntil(Quota("GenerateRequestsPerMinutePerProjectPerModel-FreeTier", "34s"))
 Check("gemini: out of the minute's - busy for a minute", AiTrack.Why("model-b"), "model-b is busy for a minute")
 
-; a 503 from the VPN or proxy, not Google: nobody rests, and the card says where it came from
-AiTrack.resting := Map()
-t := AiTrack({word: "bank", context: "", mode: "word"})
-t.Got(t.steps[1], Net(503), "")
-CheckTrue("gemini: the network's 503 - no rest", !AiTrack.resting.Has("model-a"))
-CheckHas("gemini: ...the next model is asked, and the card says why", t.Waiting, "model-a: HTTP 503 from the network, not Gemini, trying model-b")
-t.Got(t.steps[1], Net(403), "")
-CheckTrue("gemini: ...the last one too - done, and it says to check the VPN"
-    , t.done && t.note = "Gemini not reached (HTTP 403 from the network) - check the VPN or proxy" && !AiTrack.resting.Count, t.note)
+; an answer from the VPN or proxy, or Google's block page, not Gemini: nobody
+; rests, no other model is tried, and the card says to check the VPN
+for code in [503, 403] {
+    AiTrack.resting := Map()
+    t := AiTrack({word: "bank", context: "", mode: "word"})
+    t.Got(t.steps[1], Net(code), "")
+    CheckTrue("gemini: the network's " code " - done at once, no rest", t.done && !AiTrack.resting.Count
+        , t.done ? "rests " AiTrack.resting.Count : "went on to " t.steps[1].model)
+    Check("gemini: ...and it says to check the VPN", t.note
+        , "Gemini not reached (HTTP " code " from the network) - check the VPN or proxy")
+}
 
 ; everything resting for being busy: Flash-Lite is asked first, then the others
 later := DateAdd(A_NowUTC, 3600, "Seconds")
@@ -511,6 +513,9 @@ t := AiTrack({word: "bank", context: "", mode: "word"})
 Check("gemini: all busy - Flash-Lite first", t.steps[1].model, "gemini-3.5-flash-lite")
 t.Got(t.steps[1], Fail("", 503), "")
 Check("gemini: ...then the next resting one", t.steps[1].model, "gemini-3.7-flash")
+AiTrack.resting["gemini-3.5-flash-lite"] := AiTrack.NextQuotaDay()
+Check("gemini: all resting, Flash-Lite out of the day's quota - it goes last", Join(AiTrack.Models(), ",")
+    , "gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash-lite")
 AiTrack.chain := ["model-a", "model-b"]
 
 ; everything out of the day's quota: only the first is asked, then it stops and says until when
