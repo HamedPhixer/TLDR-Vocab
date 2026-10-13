@@ -861,10 +861,13 @@ class FaTrack extends Track {
 ;   - a model that said no rests (RestUntil), and the next lookup does not
 ;     wait on it: out of its day's free quota until the quota day starts
 ;     again; busy (503, 504) or silent for the whole Wait, for SlowRest;
-;     out of the minute's quota, for about a minute. Resting models are
-;     asked only when no other model is left, and one that then answers
-;     rests no more. The rests are kept in cache\gemini.json, so a restart
-;     does not forget them.
+;     out of the minute's quota, for about a minute. Only an answer from
+;     Google itself rests a model: a VPN or proxy that cannot get through
+;     says 503 too, for every model within seconds (October 2026 - all of
+;     them rested two hours). Resting models are asked only when no other
+;     model is left, Flash-Lite first, and one that then answers rests no
+;     more; one out of its day's quota is not asked at all. The rests are
+;     kept in cache\gemini.json, so a restart does not forget them.
 ;   - all of it, every model and every retry, stops at Budget ms, with a note
 ;     that says to look up again
 ;--------------------------------------------------------------------------------
@@ -1073,11 +1076,14 @@ class AiTrack extends Track {
                 chain := AiTrack.Guess.Clone()
             chain.InsertAt(1, m)
         }
-        ; resting models last - asked only when no other is left
-        out := [], tired := []
+        ; resting models last - asked only when no other is left, Flash-Lite
+        ; first: it is the quickest to answer
+        out := [], tired := [], lite := []
         for x in chain
-            if !HasVal(out, x) && !HasVal(tired, x)
-                (AiTrack.IsResting(x) ? tired : out).Push(x)
+            if !HasVal(out, x) && !HasVal(tired, x) && !HasVal(lite, x)
+                (!AiTrack.IsResting(x) ? out : InStr(x, "flash-lite") ? lite : tired).Push(x)
+        for x in lite
+            out.Push(x)
         for x in tired
             out.Push(x)
         return out
@@ -1112,6 +1118,8 @@ class AiTrack extends Track {
     ; the next request, unless the time for all of them is up
     ; what a model's answer meant, for the waiting line
     static Said(m, r) {
+        if (r.status && !AiTrack.FromGoogle(r))
+            return AiTrack.Short(m) ": HTTP " r.status " from the network, not Gemini"
         if (r.status = 429 || r.status = 503 || r.status = 504)
             return AiTrack.Why(m)
         return AiTrack.Short(m) ((r.status = 404) ? " is no longer offered"
@@ -1133,7 +1141,8 @@ class AiTrack extends Track {
 
     ; Which model after one that said no: the first in the list not asked yet
     ; and not resting - resting ones are only asked when nothing else is
-    ; left, and then only the first. Flash-Lite stands before the other
+    ; left, in the order Models put them, and never one out of its day's
+    ; quota: that one is sure to say no again. Flash-Lite stands before the other
     ; Flash in the list, so a slow Flash is followed by Flash-Lite. But a
     ; Flash that said no at once (a reply, not a wait) leaves time for one
     ; more Flash, when Flash-Lite would still have Spare ms after its Wait.
@@ -1144,6 +1153,9 @@ class AiTrack extends Track {
                     return m
         for m in this.models
             if (!this.asked.Has(m) && !AiTrack.IsResting(m))
+                return m
+        for m in this.models
+            if (!this.asked.Has(m) && AiTrack.resting.Has(m) && AiTrack.resting[m] != AiTrack.NextQuotaDay())
                 return m
         return ""
     }
@@ -1190,19 +1202,21 @@ class AiTrack extends Track {
         }
         ; Silent for the whole Wait rests it too - but not when the time left
         ; for the lookup cut its wait short: it never had a fair chance.
-        if (r.status = 429 || r.status = 503 || r.status = 504
+        google := AiTrack.FromGoogle(r)
+        if (((r.status = 429 || r.status = 503 || r.status = 504) && google)
             || (r.err = "timed out" && s.opts.timeout >= AiTrack.Wait)) {
             AiTrack.resting[s.model] := AiTrack.RestUntil(r)
             AiTrack.SaveState()
         }
-        if (r.status = 404) {                   ; a model Google retired: a new list next time
+        if (r.status = 404 && google) {         ; a model Google retired: a new list next time
             AiTrack.chain := "", AiTrack.listed := ""
             AiTrack.SaveState()
         }
         if (r.status = 429 || r.status = 404 || r.status = 403 || r.status >= 500 || r.err != "")
             if ((m := this.NextModel(s, r)) != "")
                 return this.Next(this.GenStep(m), AiTrack.Said(s.model, r) ", trying " AiTrack.Short(m))
-        this.note := (r.status = 429) ? AiTrack.QuotaNote()
+        this.note := (r.status && !google) ? "Gemini not reached (HTTP " r.status " from the network) - check the VPN or proxy"
+                   : (r.status = 429) ? AiTrack.QuotaNote()
                    : (r.status = 503 || r.status = 504 || r.err = "timed out") ? AiTrack.Said(s.model, r)
                    : r.Ok ? "no usable answer"
                    : (msg != "") ? Http.Short(msg) : r.Why
@@ -1279,6 +1293,17 @@ class AiTrack extends Track {
     static ErrMsg(r) {
         try return Dig(Json.Parse(r.text), "error", "message")
         return ""
+    }
+
+    ; Did Gemini itself say this? Its refusals are JSON that repeat the
+    ; status: {"error": {"code": 503, ...}}. A VPN or proxy that cannot get
+    ; through answers 502/503/504 of its own, and Google's front door in a
+    ; blocked country 403 - as a web page.
+    static FromGoogle(r) {
+        if r.Ok
+            return true
+        try return Dig(Json.Parse(r.text), "error", "code") = r.status
+        return false
     }
 
     static PickModels(r) {

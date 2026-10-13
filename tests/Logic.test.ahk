@@ -341,7 +341,10 @@ IniWrite("test-key", VocabIni(), "Gemini", "ApiKey")
 try FileDelete(AiTrack.StateFile)
 AiTrack.chain := ["model-a", "model-b"]
 AiTrack.loaded := true, AiTrack.listed := FormatTime(, "yyyyMMdd")    ; no list request
-Fail(err, status := 0) => {err: err, status: status, text: "", Ok: false, Why: (err != "") ? err : "HTTP " status}
+; a refusal from Google is JSON that repeats the status; Net() is one from a VPN or proxy
+Fail(err, status := 0) => {err: err, status: status, text: status ? '{"error": {"code": ' status ', "message": "no"}}' : ""
+    , Ok: false, Why: (err != "") ? err : "HTTP " status}
+Net(status) => Fail("", status).DefineProp("text", {value: "<html>Service Unavailable</html>"})
 t := AiTrack({word: "bank", context: "", mode: "word"})
 first := t.steps[1]
 Check("gemini: starts with the first model", first.model, "model-a")
@@ -490,7 +493,27 @@ CheckTrue("gemini: the last model left is busy - it says so", t.done
 AiTrack.resting["model-b"] := AiTrack.RestUntil(Quota("GenerateRequestsPerMinutePerProjectPerModel-FreeTier", "34s"))
 Check("gemini: out of the minute's - busy for a minute", AiTrack.Why("model-b"), "model-b is busy for a minute")
 
-; everything resting: only the first is asked, then it stops and says until when
+; a 503 from the VPN or proxy, not Google: nobody rests, and the card says where it came from
+AiTrack.resting := Map()
+t := AiTrack({word: "bank", context: "", mode: "word"})
+t.Got(t.steps[1], Net(503), "")
+CheckTrue("gemini: the network's 503 - no rest", !AiTrack.resting.Has("model-a"))
+CheckHas("gemini: ...the next model is asked, and the card says why", t.Waiting, "model-a: HTTP 503 from the network, not Gemini, trying model-b")
+t.Got(t.steps[1], Net(403), "")
+CheckTrue("gemini: ...the last one too - done, and it says to check the VPN"
+    , t.done && t.note = "Gemini not reached (HTTP 403 from the network) - check the VPN or proxy" && !AiTrack.resting.Count, t.note)
+
+; everything resting for being busy: Flash-Lite is asked first, then the others
+later := DateAdd(A_NowUTC, 3600, "Seconds")
+AiTrack.chain := ["gemini-3.7-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"]
+AiTrack.resting := Map("gemini-3.7-flash", later, "gemini-3.5-flash-lite", later, "gemini-3.6-flash", later)
+t := AiTrack({word: "bank", context: "", mode: "word"})
+Check("gemini: all busy - Flash-Lite first", t.steps[1].model, "gemini-3.5-flash-lite")
+t.Got(t.steps[1], Fail("", 503), "")
+Check("gemini: ...then the next resting one", t.steps[1].model, "gemini-3.7-flash")
+AiTrack.chain := ["model-a", "model-b"]
+
+; everything out of the day's quota: only the first is asked, then it stops and says until when
 AiTrack.resting := Map("model-a", AiTrack.NextQuotaDay(), "model-b", AiTrack.NextQuotaDay())
 t := AiTrack({word: "bank", context: "", mode: "word"})
 t.Got(t.steps[1], day, "")
