@@ -30,7 +30,7 @@ Check("keyname: NumpadHome", Keys.KeyName(0x24, 0x47), "NumpadHome")
 Check("same key written two ways", Keys.Parse("#``").same, Keys.Parse("#vkC0").same)
 tip := Keys.TrayText()
 CheckTrue("tray tip fits", StrLen(tip) <= 127, StrLen(tip) " characters")
-CheckHas("tray tip has every default key", tip, "word`n", "translate", "summary", "selection", "box", "word list")
+CheckHas("tray tip has every default key", tip, "word`n", "translate", "summary", "selection", "box", "check", "words")
 
 ;--- sentences: what Translate takes -------------------------------------------
 SpanOf(all, near, whole := true) {
@@ -599,6 +599,76 @@ loop files tmp "\words.unreadable-*.json"
 Check("store: ...and the broken file kept aside", set, 1)
 Store.Path := A_ScriptDir "\words.json", Store.BackupDir := A_ScriptDir "\backups", Store.words := []
 try DirDelete(tmp, true)
+
+;--- Check my English ------------------------------------------------------------
+CheckTrue("check: its key is usable", Keys.Check(Keys.Find("Check").def, "Check").err = "", Keys.Check(Keys.Find("Check").def, "Check").err)
+Check("check: what was written, tidied", CheckText("i  think`r`n`r`n`r`n  it was ok `t too`r`n"), "i think`n`nit was ok too")
+Check("check: the sentence a word is in", SentenceAt("I went there. Me and him goed home. Then bed.", 18), "Me and him goed home.")
+
+lk := {word: "I am agree with you, but the price is very expensive.", context: "", mode: "check"}
+p := AiTrack.Prompt(lk)
+CheckHas("check prompt: a text", p, "Their text (a chat message", lk.word, "native speaker: the most common, everyday way"
+    , "do not invent problems", '"pattern_example"')
+CheckTrue("check prompt: ...not the word question", !InStr(p, "unsure about the word"))
+p := AiTrack.Prompt({word: "goed", context: "Me and him goed home.", mode: "check"})
+CheckHas("check prompt: a word in its sentence", p, 'unsure about the word "goed" in this sentence they wrote', "Me and him goed home."
+    , "their sentence with the better word", "give the better word if not")
+CheckHas("check prompt: a word alone", AiTrack.Prompt({word: "goed", context: "", mode: "check"}), "sentence around it is not available")
+CheckTrue("check: no translator asked", !FaTrack({word: "I am agree.", query: "i am agree.", context: "", mode: "check"}).enabled)
+
+CheckReply(j) => {text: Json.Dump(Map("candidates", [Map("content", Map("parts", [Map("text", j)]))]))}
+got := AiTrack.Answer("check", CheckReply('{"verdict": "Small", "better": "I agree with you.", "points": ["agree is a verb - no am", ""], "reader": "They agree.", "pattern": "I agree with you, but ...", "pattern_use": "to agree and add a doubt", "pattern_example": "I agree with you, but it is late."}'))
+Check("check answer: read", got ? got["verdict"] "|" got["better"] "|" got["points"].Length "|" got["pattern"] : "(none)"
+    , "small|I agree with you.|1|I agree with you, but ...")
+got := AiTrack.Answer("check", CheckReply('{"verdict": "perfect", "reader": "Fine."}'))
+Check("check answer: an unknown verdict is no verdict, missing keys are empty", got ? got["verdict"] "|" got["better"] "|" got["points"].Length : "(none)", "||0")
+Check("check answer: nothing usable", AiTrack.Answer("check", CheckReply('{"pattern": "x"}')), "")
+
+Marked(old, new) {
+    s := ""
+    for w in DiffWords(old, new)
+        s .= (s = "" ? "" : " ") (w.new ? "[" w.t "]" : w.t)
+    return s
+}
+Check("diff: a changed word", Marked("Me and him goed home.", "Me and him went home."), "Me and him [went] home.")
+Check("diff: a word gone, a word added", Marked("I am agree with you", "I agree with you completely"), "I agree with you [completely]")
+Check("diff: a capital letter is a change", Marked("i think so", "I think so"), "[I] think so")
+Check("diff: line breaks kept, never marked", Marked("Hi.`nI goed.", "Hi.`nI went."), "Hi. `n I [went.]")
+Check("diff: the same text", Marked("All good.", "All good."), "All good.")
+
+; the card, drawn off screen: nothing throws, and each part is there
+CardText(st) {
+    g := Gui()
+    owner := PopupCard()
+    owner.st := st
+    RenderCheck(g, PopWide, st, owner)
+    s := ""
+    for c in g
+        if (c.Type = "Text" && c.Visible)
+            s .= c.Text "|"
+    g.Destroy()
+    return s
+}
+FakeLk(data, done := true) => {ai: {enabled: true, done: done, data: data, source: "Gemini test", note: "busy", Waiting: "asking Gemini..."}}
+ans := AiTrack.Answer("check", CheckReply('{"verdict": "wrong", "better": "He and I went home.", "points": ["went is the past of go"], "reader": "They went home.", "pattern": "He and I ...", "pattern_use": "you and another person", "pattern_example": "She and I met there."}'))
+st := {word: "Me and him goed home.", context: "", lk: FakeLk(ans), flash: "", mode: "check"}
+s := CardText(st)
+CheckHas("check card: a text", s, "Needs a fix", "BETTER VERSION", "copy", "WHY", "went is the past of go"
+    , "WHAT A READER UNDERSTANDS", "LEARN THIS", "He and I ...", "+ save", "YOU WROTE|Me and him goed home.", "Gemini test")
+st.lk := FakeLk("", false)
+CheckHas("check card: while it waits", CardText(st), "CHECK MY ENGLISH", "asking Gemini...")
+ok := AiTrack.Answer("check", CheckReply('{"verdict": "correct", "better": "Me and him goed home.", "reader": "Fine.", "pattern": ""}'))
+st.lk := FakeLk(ok)
+s := CardText(st)
+CheckTrue("check card: correct - no better version, nothing to learn", InStr(s, "Correct") && !InStr(s, "BETTER VERSION") && !InStr(s, "LEARN THIS"), s)
+st := {word: "goed", context: "Me and him goed home.", lk: FakeLk(ans), flash: "", mode: "check"}
+s := CardText(st)
+CheckHas("check card: a word shows its sentence", s, "goed|", Chr(0x201C) "Me and him goed home." Chr(0x201D))
+CheckTrue("check card: ...and no YOU WROTE", !InStr(s, "YOU WROTE"), s)
+
+rec := PatternRecord({lk: FakeLk(ans)})
+Check("check: a saved pattern", rec["word"] "|" rec["kind"] "|" rec["meaning"] "|" rec["examples"].Length
+    , "He and I ...|pattern|you and another person|2")
 
 ;--- small helpers -------------------------------------------------------------
 Check("clean word: quotes and comma", CleanWord(Chr(0x201C) "Hello," Chr(0x201D)), "Hello")

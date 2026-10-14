@@ -34,6 +34,7 @@ All of them can be changed — or switched off — in Settings.
 | **Shift + Win + Click** | **Translate a passage**: the sentences around the one you click, explained in plain English and translated — up to ten, stopping at a line that ends with `. ! ? : ;`. Or only the sentence you click: Settings → Translation. |
 | **Ctrl + Win + Click** | **Summary**: the whole block of text under the mouse, summarised in both languages — a game note, a blog post. |
 | **Win + `** | Whatever text is selected (\` is the key left of 1). |
+| **Ctrl + Win + `** | **Check my English**: select something *you* wrote and get a quick check — see below. |
 | **Shift + Win + `** | Draw a box: the screen freezes and dims, drag a rectangle over the text, let go. Only what is inside is read — and since the screen froze when you pressed the key, a tooltip that vanishes when the mouse moves is still there to box. |
 | **Win + F7** | Your saved word list. |
 | **Esc** | Closes the card. A click outside it does too. |
@@ -52,6 +53,21 @@ of the card to redo the same text the other way.
 
 **Pin a card** to keep it: the pin at its top right leaves it on screen, where you can drag it anywhere, and
 its × closes it. The next lookup opens a new card beside it, so you can keep several at once.
+
+## Check my English
+
+Select something you wrote — a chat message, an email, a post — and press **Ctrl + Win + `**
+(needs Gemini). The card says:
+
+- whether it is **correct**, needs a **small fix**, or **needs a fix**;
+- a **better version**, only when something should change, with the changed words in green and a
+  **copy** button — it never changes your text itself;
+- **why**, in two or three short points;
+- **what a reader understands** from what you wrote, so you can see if it says what you meant;
+- one **phrase or sentence pattern to learn** — **+ save** keeps it in your word list.
+
+Select a **single word** to ask "is this word right here?". The sentence around it is read straight from
+the text box (Windows' UI Automation, no screen reading), so the mouse does not have to be over it.
 
 ## Your word list
 

@@ -133,4 +133,18 @@ Settings.pane.ScrollBy(100000)
 CheckTrue("settings: not past the end", Settings.pane.scroll = full - Settings.pane.h)
 Settings.Close()
 
+; Check my English, one word: the sentence comes from the text box itself
+; (UI Automation), exactly where the selection is - the word is in the box
+; twice, and the second one is selected
+eg := Gui("+AlwaysOnTop -DPIScale")
+ed := eg.Add("Edit", "w500 r3", "I goed out. Me and him goed home. Then bed.")
+eg.Show("x40 y40")
+WinActivate(eg.Hwnd)
+ed.Focus()
+at := InStr(ed.Value, "goed", , , 2) - 1
+SendMessage(0xB1, at, at + 4, ed)                   ; EM_SETSEL
+Sleep 200
+Check("check: the selected word's sentence, from an old-style text box", SentenceWith("goed", 0, 0), "Me and him goed home.")
+eg.Destroy()
+
 Done()

@@ -31,6 +31,11 @@
 ;   Win + `             the selected text instead (copied with Ctrl+C); with
 ;                       nothing selected it falls back to the word under the
 ;                       mouse
+;   Ctrl + Win + `      CHECK MY ENGLISH: the selected text is your own, checked
+;                       by Gemini - right or not, a better version when it
+;                       needs one, why, what a reader understands, and one
+;                       pattern worth learning. One word selected: is it
+;                       right in its sentence? See Check.ahk
 ;   Shift + Win + `     draw a box over any text and let go: only what is
 ;                       inside is read, and sent where it fits by its length,
 ;                       like the selection. The screen freezes when the

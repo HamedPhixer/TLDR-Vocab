@@ -774,6 +774,10 @@ class DefTrack extends Track {
 ;--------------------------------------------------------------------------------
 class FaTrack extends Track {
     Start() {
+        if (this.lk.mode = "check") {           ; English about English - see Check.ahk
+            this.enabled := false, this.done := true
+            return
+        }
         if this.FromCache(Lang.CacheKind())
             return
         ; a word is looked up in lower case, but a sentence or a paragraph is
@@ -1361,6 +1365,8 @@ class AiTrack extends Track {
         j := Json.Parse(SubStr(txt, a, b - a + 1))
         if !(j is Map)
             return ""
+        if (mode = "check")
+            return AiTrack.CheckAnswer(j)
         out := Map()
         keys := (mode = "sentence") ? ["fixed", "simple", "translation", "note"]
              : (mode = "paragraph") ? ["summary", "translation", "note"]
@@ -1377,7 +1383,64 @@ class AiTrack extends Track {
         return (out["meaning"] = "") ? "" : out
     }
 
+    ; Check my English (Check.ahk): every key always there, points a list
+    static CheckAnswer(j) {
+        out := Map()
+        for k in ["verdict", "better", "reader", "pattern", "pattern_use", "pattern_example"] {
+            v := Dig(j, k)
+            out[k] := Trim(IsObject(v) ? "" : String(v))
+        }
+        out["verdict"] := StrLower(out["verdict"])
+        if !HasVal(["correct", "small", "wrong"], out["verdict"])
+            out["verdict"] := ""
+        pts := []
+        for p in ((Dig(j, "points") is Array) ? j["points"] : [])
+            if (!IsObject(p) && Trim(p) != "")
+                pts.Push(Trim(p))
+        out["points"] := pts
+        return (out["verdict"] = "" && out["better"] = "" && out["reader"] = "") ? "" : out
+    }
+
+    ; One prompt for both cases, told which it is: a word the writer is unsure
+    ; of (with the sentence it is in, when there is one), or a text of theirs.
+    ; Agreed with the user before it was built (docs\decisions.md).
+    static CheckPrompt(lk) {
+        word := (lk.context != "" || CountWords(lk.word) = 1)
+        q := Chr(34)
+        p := "You help a native " Lang.PromptName() " speaker who writes in English as a second language."
+            . " They want a quick check and one small lesson, not a rewrite. They want to sound like a"
+            . " native speaker: the most common, everyday way to say it.`n`n"
+        if !word
+            p .= "Their text (a chat message, an email or a post):`n" q lk.word q "`n`n"
+        else if (lk.context != "")
+            p .= "They are unsure about the word " q lk.word q " in this sentence they wrote:`n" q lk.context q "`n`n"
+        else
+            p .= "They are unsure about the word " q lk.word q "; the sentence around it is not available.`n`n"
+        return p . "Reply with JSON only, with exactly these keys:`n"
+            . '{"verdict": "", "better": "", "points": [], "reader": "", "pattern": "", "pattern_use": "", "pattern_example": ""}' "`n`n"
+            . "verdict: " q "correct" q " if it is correct and natural; " q "small" q " if it is clear but a native speaker"
+            . " would put it a little differently; " q "wrong" q " if it has a real mistake or could be misread`n"
+            . "better: " (word ? "their sentence with the better word, and only the changes that matter" : "their text with only the changes that matter")
+            . ". Keep their words, meaning, opinion and tone, and do not make it more formal. Keep their line breaks."
+            . " Empty when the verdict is " q "correct" q "`n"
+            . "points: at most three short strings, each " q "what changed - why" q ", in simple English. Fewer is fine."
+            . " Empty when the verdict is " q "correct" q "`n"
+            . "reader: one sentence: what a native reader understands from their ORIGINAL "
+            . (word ? "sentence" : "text") ", so they can see whether it says what they meant`n"
+            . "pattern: one reusable phrase or sentence pattern worth learning from this - preferably about"
+            . " joining ideas, ordering a sentence or opening a point (for example " q "I can't tell whether ..." q "),"
+            . " not a single word. Always give one when something changed. When it was already correct and"
+            . " natural, give one only if a native speaker would more commonly say it another way; otherwise empty`n"
+            . "pattern_use: when to use it, in a few words`n"
+            . "pattern_example: one short new example sentence using it`n`n"
+            . "If it is correct and natural, say so; do not invent problems or impose a style. Casual chat"
+            . " writing (lower case, no full stop) is fine; mention it only if it changes the meaning."
+            . (word ? " Say whether the word fits here, and give the better word if not." : "")
+    }
+
     static Prompt(lk) {
+        if (lk.mode = "check")
+            return AiTrack.CheckPrompt(lk)
         if (lk.mode = "sentence")
             return AiTrack.SentencePrompt(lk)
         if (lk.mode = "paragraph")

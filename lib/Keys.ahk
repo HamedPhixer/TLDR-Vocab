@@ -49,7 +49,8 @@ class Keys {
         {id: "Summary",   name: "Summarise a block",       short: "summary",   def: "^#LButton", fn: LookupParagraphUnderMouse},
         {id: "Selection", name: "Look up selected text",   short: "selection", def: "#vkC0",     fn: LookupSelection},
         {id: "Box",       name: "Draw a box to read",      short: "box",       def: "+#vkC0",    fn: LookupBox},
-        {id: "WordList",  name: "Open the word list",      short: "word list", def: "#F7",       fn: (*) => Dict.Toggle()}
+        {id: "Check",     name: "Check my English",        short: "check",     def: "^#vkC0",    fn: CheckSelection},
+        {id: "WordList",  name: "Open the word list",      short: "words",     def: "#F7",       fn: (*) => Dict.Toggle()}
     ]
     static cur := Map()             ; id -> the hotkey in use now ("" = none)
 
@@ -281,11 +282,12 @@ class Keys {
             if (Keys.cur.Has(a.id) && Keys.cur[a.id] != "")
                 lines .= "`n" Keys.Label(Keys.cur[a.id], true) " " a.short
         ; a tray tip holds 127 characters: the keys come first, the version
-        ; only if there is room, and past that whole lines are dropped
-        tip := AppName " " VocabVersion lines
-        if (StrLen(tip) <= 127)
-            return tip
-        tip := AppName lines
+        ; and then the name only if there is room, and past that whole lines
+        ; are dropped
+        for tip in [AppName " " VocabVersion lines, AppName lines]
+            if (StrLen(tip) <= 127)
+                return tip
+        tip := SubStr(lines, 2)
         while (StrLen(tip) > 127)
             tip := SubStr(tip, 1, InStr(tip, "`n", , -1) - 1)
         return tip

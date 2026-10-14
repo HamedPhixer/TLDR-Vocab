@@ -49,7 +49,7 @@ class PopupCard {
             , cut: IsObject(anchor) && anchor.HasProp("cut") && anchor.cut}     ; the text was too long - see Paragraph.ahk
         this.misread := ""
         this.anchor := anchor
-        this.Plan((mode = "paragraph") ? PopWide : PopW)
+        this.Plan((mode = "paragraph" || mode = "check") ? PopWide : PopW)
         this.pane.Clear()
         this.Render()
     }

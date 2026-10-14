@@ -22,8 +22,9 @@ LookupUnderMouse(*) {
     StartLookup(hit.word, hit.context, Popup, hit, true)
 }
 
-LookupSelection(*) {
-    MouseGetPos(&mx, &my)
+; The selected text, copied with Ctrl+C; the clipboard is put back as it was.
+; "" when nothing is selected.
+CopySelection() {
     ; or Ctrl+C goes out as Ctrl+Win+C - or with whatever the key was changed to
     for k in ["LWin", "RWin", "Alt", "Shift", "Ctrl"]
         KeyWait(k, "T1")
@@ -32,8 +33,12 @@ LookupSelection(*) {
     Send("^c")
     text := ClipWait(0.6) ? A_Clipboard : ""
     A_Clipboard := saved
-    saved := ""
-    got := CutAtLine(Trim(text))        ; the summary's own limit, at the end of a line
+    return text
+}
+
+LookupSelection(*) {
+    MouseGetPos(&mx, &my)
+    got := CutAtLine(Trim(CopySelection()))   ; the summary's own limit, at the end of a line
     text := Trim(RegExReplace(got.text, "\s+", " "))
     if (text = "") {
         LookupUnderMouse()

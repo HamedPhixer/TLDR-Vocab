@@ -268,6 +268,31 @@ own. How it is built (the steps are at the top of `lib\Install.ahk`):
 - **Trap:** a `for` loop's own variable is not visible inside a `() =>` closure in AutoHotkey 2.0 — the
   swap code copies it into a normal variable first.
 
+## Check my English (1.3.0)
+
+- **A check and a small lesson, not a fixer.** The user writes English as a second language; grammar is
+  mostly fine, what they want is to sound like a native — "the most common, everyday way to say it".
+  So: a verdict, a better version only when something changes, about three short points, and one
+  reusable pattern to learn (savable, for the review mode to bring back). Explanations are in simple
+  English, not the translation language — the user's choice: reading English about English is practice.
+- **The prompt was agreed with the user before it was built** (2026-10-14). It says: do not invent
+  problems, do not impose a style, do not make it more formal, keep their words and tone; casual chat
+  writing is fine. "What a reader understands" is there so the user can tell whether the English says what
+  they meant.
+- **"Learn this" when the text was already right:** only if a native speaker would more commonly say it
+  another way — no lesson for the sake of one. The user left this call to me.
+- **It never replaces the text.** "copy" puts the better version on the clipboard; doing the fix yourself
+  is the point.
+- **The changed words are found by the app** (a word diff, the longest common run), not marked by Gemini:
+  models asked to mark their own edits mark some they did not make and miss others.
+- **One word selected reads its sentence from the text box,** not the screen — the user's idea: what you
+  are typing is nearly always in a box that can say its own text. In order: UI Automation's text pattern
+  (the box's text and the selection's place in it — browsers, chat apps, Word, the new Notepad), an
+  old-style Edit's own EM_GETSEL (plain Windows boxes have no text pattern — tested), UI Automation's
+  value (the whole text; the first place the word is), and only then OCR under the pointer.
+- **The tray tip ran out of room** with a seventh key (127 characters). The name goes before any key
+  does, and "word list" became "words".
+
 ## Removed on purpose
 
 - **The setting that hid the speaker button.** The button is always there now; a switch to hide one

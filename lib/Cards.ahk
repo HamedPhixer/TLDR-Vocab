@@ -33,6 +33,32 @@ class Flow {
     ; another one. Right-to-left languages get RTL reading order and are
     ; right-aligned, so punctuation lands where they expect it, and are wrapped
     ; at spaces (WrapByWords); the rest are ordinary text.
+    ; Words one by one, so some can stand out: pieces is [{t, new}], and the
+    ; new ones are bold in hi. "`n" starts a new line. Wrapped at the width
+    ; like ordinary text. English only - see DiffWords in Check.ahk.
+    Runs(pieces, font, color, hi) {
+        x := this.x, y := this.y, lineH := 0
+        this.g.SetFont(font, FontUI)
+        two := this.g.Add("Text", "x0 y0 Hidden", "a a"), two.GetPos(, , &w2)
+        one := this.g.Add("Text", "x0 y0 Hidden", "aa"), one.GetPos(, , &w1)
+        space := Max(3, w2 - w1)
+        for p in pieces {
+            if (p.t = "`n") {
+                x := this.x, y += lineH ? lineH : 16, lineH := 0
+                continue
+            }
+            this.g.SetFont(font (p.new ? " Bold" : "") " c" (p.new ? hi : color), FontUI)
+            c := this.g.Add("Text", "x" x " y" y " BackgroundTrans +0x80", p.t)
+            c.GetPos(, , &cw, &ch)
+            if (x > this.x && x + cw > this.x + this.w) {
+                x := this.x, y += lineH, lineH := 0
+                c.Move(x, y)
+            }
+            x += cw + space, lineH := Max(lineH, ch)
+        }
+        this.y := y + lineH + 3
+    }
+
     Tr(text, font := "s12 Norm", color := "", indent := 0, code := "") {
         color := (color != "") ? color : CGreen
         if Lang.Rtl(code)
@@ -300,6 +326,8 @@ Ellipsis(f) => f.Text(Chr(0x2026), CDim, "s9 Norm")
 PosLine(f, grp) => f.Text(grp["pos"] ((Dig(grp, "of") != "") ? "   " Chr(0xB7) "   " grp["of"] : ""), CAmber, "s8 Norm Italic", "", 1)
 
 RenderLookup(g, W, st, owner) {
+    if (st.HasProp("mode") && st.mode = "check")
+        return RenderCheck(g, W, st, owner)
     if (st.HasProp("mode") && st.mode = "sentence")
         return RenderSentence(g, W, st, owner)
     if (st.HasProp("mode") && st.mode = "paragraph")
@@ -482,7 +510,7 @@ RenderEntry(g, W, st) {
     f.y += 8
     f.Text("added " Dig(rec, "added") ((Dig(rec, "source") != "") ? "   " Chr(0xB7) "   " rec["source"] : ""), CDim, "s7 Norm")
     last := exs.Length ? Dig(exs[exs.Length], "text") : ""
-    again := (Dig(rec, "kind") = "sentence")     ; a saved sentence comes back as a sentence card
+    again := HasVal(["sentence", "pattern"], Dig(rec, "kind"))  ; a saved sentence or pattern comes back as a sentence card
         ? (*) => StartLookup(rec["word"], "", Dict, "", false, "sentence")
         : (*) => StartLookup(rec["word"], last, Dict)
     Link(f.Text("look it up again", CBlue, "s8 Norm"), again)

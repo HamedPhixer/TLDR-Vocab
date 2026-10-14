@@ -21,6 +21,7 @@
 ;   Sentence   the Translate card
 ;   Paragraph  the Summary card
 ;   Box        drawing a box to read
+;   Check      Check my English: your own text, checked
 ;   Keys       the keys, and recording new ones
 ;   Settings   the settings window
 ;   Update     is there a newer version? (asks GitHub once a day)
@@ -48,6 +49,7 @@
 #Include %A_LineFile%\..\Sentence.ahk
 #Include %A_LineFile%\..\Paragraph.ahk
 #Include %A_LineFile%\..\Box.ahk
+#Include %A_LineFile%\..\Check.ahk
 #Include %A_LineFile%\..\Keys.ahk
 #Include %A_LineFile%\..\Settings.ahk
 #Include %A_LineFile%\..\Update.ahk
