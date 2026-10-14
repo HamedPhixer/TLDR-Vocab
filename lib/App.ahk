@@ -65,6 +65,7 @@ SetScriptIcon() {
 ; The taskbar button takes the window's own icons, which are set separately
 ; from the tray's. Only real icons (image type 1) are handed over.
 SetWindowIcon(hwnd) {
+    SetWindowAppId(hwnd)
     path := IconPath()
     if (path = "" || !FileExist(path))
         return
@@ -76,6 +77,30 @@ SetWindowIcon(hwnd) {
         if (t2 = 1)
             SendMessage(0x80, 1, big, , hwnd)           ; ICON_BIG
     }
+}
+
+; A taskbar button of its own. Windows puts every window of one program file
+; under one button, and from source this runs on the same AutoHotkey64.exe as
+; any other v2 script - so another script's window would land in Vocab's
+; button. An app id (AppUserModelID, the name the taskbar groups by) keeps them
+; apart. Set before the window's first Show, which is when the button is made.
+; Not when compiled: the .exe has its own button already, and a shortcut pinned
+; to it only matches windows WITHOUT an id.
+SetWindowAppId(hwnd) {
+    if A_IsCompiled
+        return
+    try {
+        iid := Buffer(16), pk := Buffer(20, 0), pv := Buffer(24, 0), id := "TLDR.Vocab"
+        DllCall("ole32\CLSIDFromString", "wstr", "{886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99}", "ptr", iid)  ; IPropertyStore
+        DllCall("shell32\SHGetPropertyStoreForWindow", "ptr", hwnd, "ptr", iid, "ptr*", &ps := 0, "HRESULT")
+        DllCall("ole32\CLSIDFromString", "wstr", "{9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3}", "ptr", pk)
+        NumPut("uint", 5, pk, 16)                                   ; PKEY_AppUserModel_ID
+        NumPut("ushort", 31, pv, 0), NumPut("ptr", StrPtr(id), pv, 8)  ; VT_LPWSTR
+        ComCall(6, ps, "ptr", pk, "ptr", pv)                        ; SetValue
+        ComCall(7, ps)                                              ; Commit
+    }
+    if IsSet(ps) && ps
+        ObjRelease(ps)
 }
 
 BuildTray() {

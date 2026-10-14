@@ -2,19 +2,26 @@
 
 Each version's notes. The release on GitHub is built from the section with its number.
 
-## 1.2.4 — 2026-10-07
-
-### Changed
-
-- **Summary explains in everyday Persian** and keeps names and technical terms in English, instead of
-  translating them.
+## 1.2.5 — 2026-10-14
 
 ### Fixed
 
-- **Gemini no longer softens dark lines.** "Why Are We So Bad at Executing People?" is about executions, not
-  about getting work done.
+- **With the VPN off, the card says so at once**: "Gemini not reached … check the VPN or proxy", instead of trying every model first.
+- **A VPN that cannot get through no longer benches Gemini for two hours.** Only Google's own "busy" rests a model now.
+- **When every model is resting, Flash-Lite is still asked** before the card gives up.
+- **TLDR Vocab keeps its own taskbar button**, apart from other AutoHotkey scripts.
+
+## 1.2.4 — 2026-10-07
+
+<details>
+<summary><b>Changed</b> (1), <b>Fixed</b> (3)</summary>
+
+- **Summary explains in everyday Persian** and keeps names and technical terms in English, instead of translating them.
+- **Gemini no longer softens dark lines.** "Why Are We So Bad at Executing People?" is about executions, not about getting work done.
 - **Stray digits in Gemini's Persian** are cleaned up like the stray letters.
 - **No more "The control is destroyed" error** when a card was redrawn while it was still being drawn.
+
+</details>
 
 ## 1.2.3 — 2026-10-06
 
